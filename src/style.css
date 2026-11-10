@@ -21,6 +21,13 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
   --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --target-size: 24px;
+}
+
+@media (pointer: coarse) {
+  :root {
+    --target-size: 44px;
+  }
 }
 
 body.theme-light {
@@ -53,6 +60,16 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-wrap: anywhere;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+p, li {
+  text-wrap: pretty;
 }
 
 .visually-hidden {
@@ -544,6 +561,20 @@ body.theme-light .unit-btn.active {
   align-items: center;
 }
 
+.tick-mark.tick-first {
+  transform: translateX(0);
+  align-items: flex-start;
+}
+
+.tick-mark.tick-last {
+  transform: translateX(-100%);
+  align-items: flex-end;
+}
+
+.tick-mark.tick-crowded .tick-label {
+  display: none;
+}
+
 .tick-line {
   width: 1px;
   height: 6px;
@@ -591,6 +622,7 @@ body.theme-light .unit-btn.active {
   flex-direction: column;
   gap: 1.25rem;
   box-shadow: var(--shadow-md);
+  container-type: inline-size;
 }
 
 .focus-card-top-row {
@@ -654,12 +686,6 @@ body.theme-light .unit-btn.active {
   grid-template-columns: minmax(180px, 220px) 1fr;
   gap: 1.5rem;
   align-items: center;
-}
-
-@media (max-width: 640px) {
-  .focus-main-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Compass */
@@ -970,9 +996,11 @@ body.theme-light .unit-btn.active {
 }
 
 .wind-chart-canvas {
+  display: block;
   width: 100%;
   height: 100%;
   cursor: crosshair;
+  touch-action: pan-y;
 }
 
 /* Model Selector */
@@ -1085,6 +1113,7 @@ body.theme-light .unit-btn.active {
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   container-type: inline-size;
+  overscroll-behavior: contain;
 }
 
 .forecast-data-table {
@@ -1297,8 +1326,8 @@ body.theme-light .forecast-data-table tbody th {
 /* Sticky Floating Refresh Button in Bottom-Right Corner */
 .sticky-refresh-container {
   position: fixed;
-  bottom: 1.75rem;
-  right: 1.75rem;
+  bottom: max(1.75rem, env(safe-area-inset-bottom, 0px));
+  right: max(1.75rem, env(safe-area-inset-right, 0px));
   z-index: 999;
   pointer-events: none;
 }
@@ -1377,15 +1406,466 @@ body.theme-light .sticky-cache-badge {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+/* ==========================================================================
+   Container-Aware & Mobile Responsive Enhancements
+   (Only affects narrow containers / mobile viewports; wide screens unchanged)
+   ========================================================================== */
+
+/* 1. Responsive Stacked Forecast Table when container < 640px */
+@container (width < 640px) {
+  .forecast-data-table {
+    --label-2: "Peak Gust";
+    --label-3: "Consensus";
+    --label-4: "Spread";
+    --label-5: "Direction";
+    --label-6: "Temp";
+    --label-7: "Beaufort";
+    --label-8: "Agreement";
+  }
+
+  .forecast-data-table,
+  .forecast-data-table thead,
+  .forecast-data-table tbody,
+  .forecast-data-table th,
+  .forecast-data-table td {
+    display: block;
+  }
+
+  .forecast-data-table thead {
+    /* MANDATORY: Hide column header from layout and screen readers. */
+    display: none;
+  }
+
+  .forecast-data-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.5rem;
+  }
+
+  .forecast-data-table tr.table-data-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+  }
+
+  .forecast-data-table tr.table-data-row.selected-row {
+    border-color: var(--accent-cyan);
+    background-color: rgba(56, 189, 248, 0.08);
+  }
+
+  .forecast-data-table tbody th.col-sticky-time {
+    grid-column: 1 / -1;
+    position: sticky;
+    inset-block-start: 0;
+    left: auto;
+    z-index: 2;
+    background: var(--bg-card);
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .forecast-data-table tr.table-data-row.selected-row tbody th.col-sticky-time {
+    background: var(--bg-card-hover);
+    border-left: 3px solid var(--accent-amber);
+  }
+
+  .forecast-data-table tr.table-data-row.selected-row tbody th.col-sticky-time::after {
+    content: "Selected";
+    margin-inline-start: auto;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-amber);
+  }
+
+  .forecast-data-table td {
+    padding: 0.45rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-inline-size: 0;
+  }
+
+  .forecast-data-table td::before {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+  }
+
+  .forecast-data-table td:nth-child(2)::before {
+    content: var(--label-2) ": ";
+  }
+
+  .forecast-data-table td:nth-child(3)::before {
+    content: var(--label-3) ": ";
+  }
+
+  .forecast-data-table td:nth-child(4)::before {
+    content: var(--label-4) ": ";
+  }
+
+  .forecast-data-table td:nth-child(5)::before {
+    content: var(--label-5) ": ";
+  }
+
+  .forecast-data-table td:nth-child(6)::before {
+    content: var(--label-6) ": ";
+  }
+
+  .forecast-data-table td:nth-child(7)::before {
+    content: var(--label-7) ": ";
+  }
+
+  .forecast-data-table td:nth-child(8)::before {
+    content: var(--label-8) ": ";
+  }
+
+  .forecast-data-table td.col-action {
+    display: none;
+  }
+}
+
+/* 2. Focus Card container adaptation (< 560px) */
+@container (width < 560px) {
+  .focus-main-grid {
+    grid-template-columns: auto 1fr;
+    gap: 0.85rem;
+    align-items: center;
+  }
+
+  .focus-speed-box {
+    display: contents;
+  }
+
+  .focus-compass-box {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .compass-dial {
+    width: 82px;
+    height: 82px;
+  }
+
+  .compass-arrow {
+    width: 28px;
+    height: 28px;
+  }
+
+  .compass-label-group {
+    margin-top: 0.4rem;
+  }
+
+  .compass-cardinal {
+    font-size: 1.05rem;
+  }
+
+  .compass-degrees {
+    font-size: 0.75rem;
+  }
+
+  .compass-spread {
+    font-size: 0.68rem;
+  }
+
+  .speed-main-display {
+    align-self: center;
+    justify-content: center;
+  }
+
+  .speed-number {
+    font-size: clamp(2.35rem, 1.5rem + 4vw, 3rem);
+  }
+
+  .speed-details-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .speed-details-row .stat-pill {
+    justify-content: space-between;
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .speed-details-row .stat-pill:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .beaufort-condition-desc {
+    grid-column: 1 / -1;
+    font-size: 0.8rem;
+  }
+}
+
+/* 3. Viewport-level mobile adjustments (<= 640px) */
 @media (max-width: 640px) {
+  .app-container {
+    padding: 0.65rem 0.65rem 5rem;
+    gap: 0.85rem;
+  }
+
+  #alert-container:empty {
+    display: none;
+  }
+
+  #main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  /* Compact Header on Mobile */
+  .app-header {
+    padding: 0.65rem 0.85rem;
+    gap: 0.6rem;
+  }
+
+  .brand {
+    gap: 0.5rem;
+  }
+
+  .brand-title {
+    font-size: 1.15rem;
+  }
+
+  .brand-subtitle {
+    font-size: 0.68rem;
+  }
+
+  .header-controls {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+
+  .unit-btn {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .refresh-btn .refresh-time {
+    display: none;
+  }
+
+  /* Compact Location Bar on Mobile */
+  .location-bar-section {
+    padding: 0.85rem;
+    gap: 0.65rem;
+  }
+
+  .location-primary-row {
+    gap: 0.5rem;
+  }
+
+  .search-box-container {
+    min-width: 100%;
+    order: -1;
+  }
+
+  .location-search-input {
+    /* 16px prevents iOS Safari auto-zoom on focus */
+    font-size: 1rem;
+    padding: 0.55rem 2.2rem 0.55rem 2.25rem;
+  }
+
+  .locate-me-btn {
+    flex: 0 0 auto;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .current-location-pill {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    overflow: hidden;
+  }
+
+  .spot-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .spot-coords {
+    display: none;
+  }
+
+  /* Horizontal touch-scrollable preset chips strip */
+  .presets-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .presets-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .presets-label {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+  }
+
+  .presets-list {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+
+  .preset-chip {
+    flex-shrink: 0;
+    padding: 0.3rem 0.65rem;
+  }
+
+  /* Time Scrubber on Mobile */
+  .time-scrubber-section {
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .scrubber-header-row {
+    gap: 0.4rem;
+  }
+
+  .active-time-label {
+    font-size: 1rem;
+  }
+
+  .scrubber-quick-stats {
+    width: 100%;
+    justify-content: space-between;
+    font-size: 0.825rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .tick-mark.tick-minor .tick-label {
+    display: none;
+  }
+
+  .scrubber-actions-row {
+    gap: 0.5rem;
+  }
+
+  .step-btn-group {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.3rem;
+  }
+
+  .step-btn {
+    padding: 0.45rem 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .play-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Focus Card on Mobile */
+  .focus-card {
+    padding: 0.85rem;
+    gap: 0.85rem;
+  }
+
+  .focus-date {
+    font-size: 1.05rem;
+  }
+
+  .model-chips-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .model-chip {
+    padding: 0.4rem 0.5rem;
+  }
+
+  /* Chart on Mobile */
+  .chart-section {
+    padding: 0.85rem;
+    gap: 0.65rem;
+  }
+
+  .chart-title {
+    font-size: 0.98rem;
+  }
+
+  .chart-legend {
+    gap: 0.45rem 0.65rem;
+    font-size: 0.7rem;
+  }
+
+  .canvas-wrapper {
+    height: 240px;
+  }
+
+  /* Model Selector on Mobile */
+  .model-selector-section {
+    padding: 0.85rem;
+  }
+
+  .models-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .model-checkbox-label {
+    padding: 0.45rem 0.5rem;
+    gap: 0.45rem;
+  }
+
+  .model-label-name {
+    font-size: 0.75rem;
+  }
+
+  .model-label-agency {
+    font-size: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Forecast Table Section on Mobile */
+  .table-section {
+    padding: 0.85rem;
+  }
+
+  .table-caption-title {
+    font-size: 0.98rem;
+  }
+
+  .table-wrapper {
+    max-height: 420px;
+  }
+
+  /* Sticky Refresh Button on Mobile */
   .sticky-refresh-container {
-    bottom: 1.25rem;
-    right: 1.25rem;
+    bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    right: max(1rem, env(safe-area-inset-right, 0px));
   }
 
   .sticky-refresh-btn {
-    padding: 0.65rem 1rem;
-    font-size: 0.8125rem;
+    padding: 0.6rem 0.95rem;
+    font-size: 0.8rem;
   }
 }
+
 

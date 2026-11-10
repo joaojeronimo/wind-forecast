@@ -122,9 +122,14 @@ export class TimeScrubber {
           <!-- Time tick marks -->
           <div class="slider-ticks" aria-hidden="true">
             ${this.hours.map((h, i) => {
-              if (i % 6 === 0 || i === maxIdx) {
+              const isLast = i === maxIdx;
+              const isSixHour = i % 6 === 0;
+              if (isSixHour || isLast) {
+                const isCloseToPrevTick = isLast && (maxIdx % 6 !== 0) && (maxIdx % 6 < 4);
+                const isMinor = (i % 12 !== 0 && !isLast) || (isLast && maxIdx % 6 !== 0);
+                const edgeClass = i === 0 ? 'tick-first' : isLast ? 'tick-last' : '';
                 return `
-                  <div class="tick-mark" style="left: ${(i / maxIdx) * 100}%">
+                  <div class="tick-mark ${isMinor ? 'tick-minor' : 'tick-major'} ${edgeClass} ${isCloseToPrevTick ? 'tick-crowded' : ''}" style="left: ${(i / maxIdx) * 100}%">
                     <span class="tick-line"></span>
                     <span class="tick-label">${h.hourLabel}</span>
                   </div>

@@ -70,20 +70,26 @@ export class WindChart {
     this.resizeObserver.observe(this.canvas);
   }
 
+  private getHorizontalPadding(width: number): { padLeft: number; padRight: number } {
+    if (width < 480) {
+      return { padLeft: 38, padRight: 12 };
+    }
+    return { padLeft: 45, padRight: 20 };
+  }
+
   private setupEvents(): void {
     const handleMove = (e: MouseEvent) => {
       if (this.hours.length === 0) return;
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const paddingLeft = 45;
-      const paddingRight = 20;
-      const chartWidth = rect.width - paddingLeft - paddingRight;
-      if (x < paddingLeft || x > rect.width - paddingRight) {
+      const { padLeft, padRight } = this.getHorizontalPadding(rect.width);
+      const chartWidth = rect.width - padLeft - padRight;
+      if (x < padLeft || x > rect.width - padRight) {
         this.isHovering = false;
         this.draw();
         return;
       }
-      const fraction = (x - paddingLeft) / chartWidth;
+      const fraction = (x - padLeft) / chartWidth;
       const idx = Math.round(fraction * (this.hours.length - 1));
       this.hoverIndex = Math.max(0, Math.min(this.hours.length - 1, idx));
       this.isHovering = true;
@@ -102,19 +108,21 @@ export class WindChart {
       }
     });
 
-    this.canvas.addEventListener('touchmove', (e) => {
-      if (e.touches.length > 0) {
-        const touch = e.touches[0];
-        const rect = this.canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const paddingLeft = 45;
-        const chartWidth = rect.width - paddingLeft - 20;
-        const fraction = (x - paddingLeft) / chartWidth;
-        const idx = Math.round(fraction * (this.hours.length - 1));
-        const clamped = Math.max(0, Math.min(this.hours.length - 1, idx));
-        this.callbacks.onHourSelect(clamped);
-      }
-    }, { passive: true });
+    const handleTouch = (e: TouchEvent) => {
+      if (this.hours.length === 0 || e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const rect = this.canvas.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const { padLeft, padRight } = this.getHorizontalPadding(rect.width);
+      const chartWidth = Math.max(1, rect.width - padLeft - padRight);
+      const fraction = (x - padLeft) / chartWidth;
+      const idx = Math.round(fraction * (this.hours.length - 1));
+      const clamped = Math.max(0, Math.min(this.hours.length - 1, idx));
+      this.callbacks.onHourSelect(clamped);
+    };
+
+    this.canvas.addEventListener('touchstart', handleTouch, { passive: true });
+    this.canvas.addEventListener('touchmove', handleTouch, { passive: true });
   }
 
   private renderLegend(): void {
@@ -163,8 +171,7 @@ export class WindChart {
     const isDark = document.body.classList.contains('theme-dark') ||
       (!document.body.classList.contains('theme-light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    const padLeft = 45;
-    const padRight = 20;
+    const { padLeft, padRight } = this.getHorizontalPadding(width);
     const padTop = 20;
     const padBottom = 55;
 
@@ -184,7 +191,7 @@ export class WindChart {
 
     // 1. Grid lines and Y-axis labels
     const yTicks = 5;
-    ctx.font = '11px sans-serif';
+    ctx.font = width < 480 ? '10px sans-serif' : '11px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
@@ -262,6 +269,9 @@ export class WindChart {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
+    const hourStep = chartW >= 680 ? 3 : chartW >= 320 ? 6 : 8;
+    const maxIdx = this.hours.length - 1;
+
     for (let i = 0; i < this.hours.length; i++) {
       const h = this.hours[i];
       const x = getX(i);
@@ -277,10 +287,14 @@ export class WindChart {
 
         ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
         ctx.font = 'bold 10px sans-serif';
-        ctx.fillText(h.dayLabel, x + 25, padTop + 4);
+        const dayX = Math.min(x + 25, width - padRight - 20);
+        ctx.fillText(h.dayLabel, dayX, padTop + 4);
       }
 
-      if (i % 3 === 0 || i === this.hours.length - 1) {
+      const isStepTick = i % hourStep === 0;
+      const isLastTick = i === maxIdx && (chartW >= 680 || (maxIdx % hourStep >= Math.ceil(hourStep * 0.65)));
+
+      if (isStepTick || isLastTick) {
         const arrowY = padTop + chartH + 16;
         const arrowRot = ((h.directionMean + 180) % 360) * (Math.PI / 180);
 
@@ -299,7 +313,8 @@ export class WindChart {
 
         ctx.font = '10px sans-serif';
         ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
-        ctx.fillText(h.hourLabel, x, padTop + chartH + 30);
+        const labelX = i === maxIdx && width < 480 ? Math.min(x, width - 16) : x;
+        ctx.fillText(h.hourLabel, labelX, padTop + chartH + 30);
       }
     }
 
