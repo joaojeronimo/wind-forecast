@@ -20,12 +20,45 @@
       <div id="location-container"></div>
       <div id="alert-container" role="alert" aria-live="assertive"></div>
 
+      <!-- View mode navigation tablist -->
+      <nav class="view-navigation-bar" role="tablist" aria-label="Forecast view mode">
+        <button
+          type="button"
+          role="tab"
+          id="tab-ensemble"
+          class="view-nav-tab"
+          aria-selected="true"
+          aria-controls="panel-ensemble"
+        >
+          <span class="tab-icon">🌬️</span>
+          <span class="tab-label">Ensemble Forecast</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tab-evolution"
+          class="view-nav-tab"
+          aria-selected="false"
+          aria-controls="panel-evolution"
+        >
+          <span class="tab-icon">📈</span>
+          <span class="tab-label">Run Evolution</span>
+          <span class="tab-badge">New</span>
+        </button>
+      </nav>
+
       <main id="main-content" tabindex="-1">
-        <div id="time-scrubber-container"></div>
-        <div id="focus-card-container"></div>
-        <div id="chart-container"></div>
-        <div id="model-selector-container"></div>
-        <div id="table-container"></div>
+        <div id="panel-ensemble" role="tabpanel" aria-labelledby="tab-ensemble" class="view-panel">
+          <div id="time-scrubber-container"></div>
+          <div id="focus-card-container"></div>
+          <div id="chart-container"></div>
+          <div id="model-selector-container"></div>
+          <div id="table-container"></div>
+        </div>
+
+        <div id="panel-evolution" role="tabpanel" aria-labelledby="tab-evolution" class="view-panel" hidden>
+          <div id="evolution-container"></div>
+        </div>
       </main>
 
       <footer class="app-footer" role="contentinfo">

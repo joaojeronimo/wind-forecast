@@ -30,6 +30,7 @@ export function isOpenMeteoCacheKey(key: string): boolean {
   return (
     key.startsWith('https://api.open-meteo.com') ||
     key.startsWith('https://geocoding-api.open-meteo.com') ||
+    key.startsWith('https://single-runs-api.open-meteo.com') ||
     key.startsWith('openmeteo_cache:')
   );
 }

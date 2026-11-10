@@ -5,9 +5,12 @@ import {
   AppSettings,
   SpeedUnit,
   TempUnit,
-  ModelId
+  ModelId,
+  ViewMode,
+  RunEvolutionResult
 } from './types';
 import { AVAILABLE_MODELS, fetchWindForecast, generateDemoForecast, clearOpenMeteoCache } from './api/openMeteo';
+import { fetchRunEvolution, generateDemoRunEvolution } from './api/runEvolution';
 import { PRESET_LOCATIONS } from './utils/presets';
 import { renderHeader } from './components/header';
 import { renderLocationBar } from './components/locationBar';
@@ -17,16 +20,26 @@ import { WindChart } from './components/windChart';
 import { renderModelSelector } from './components/modelSelector';
 import { renderForecastTable } from './components/forecastTable';
 import { renderStickyRefreshButton } from './components/stickyRefreshButton';
+import { RunEvolutionView } from './components/runEvolution/runEvolutionView';
 import { aggregateHour } from './utils/aggregation';
 import { findRestoredSelectionIndex } from './utils/selection';
 
 export class WindForecastApp {
   private settings: AppSettings;
   private currentLocation: LocationInfo;
+  private currentView: ViewMode = 'ensemble';
+
+  // Ensemble state
   private forecastResult: ForecastResult | null = null;
   private selectedIndex = 0;
   private isLoading = false;
   private lastUpdated: Date | null = null;
+
+  // Run Evolution state
+  private evolutionResult: RunEvolutionResult | null = null;
+  private evolutionModel: ModelId = 'ecmwf_ifs025';
+  private isEvolutionLoading = false;
+  private evolutionView: RunEvolutionView | null = null;
 
   // Components
   private scrubber: TimeScrubber | null = null;
@@ -35,6 +48,7 @@ export class WindForecastApp {
   constructor() {
     this.settings = this.loadSettings();
     this.currentLocation = this.loadInitialLocation();
+    this.currentView = this.loadInitialView();
     this.applyTheme(this.settings.theme);
 
     this.init();
@@ -68,8 +82,18 @@ export class WindForecastApp {
     localStorage.setItem('wind_forecast_settings', JSON.stringify(this.settings));
   }
 
+  private loadInitialView(): ViewMode {
+    if (window.location.hash === '#evolution') {
+      return 'evolution';
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'evolution') {
+      return 'evolution';
+    }
+    return 'ensemble';
+  }
+
   private loadInitialLocation(): LocationInfo {
-    // Check URL parameters first (?lat=...&lon=...&name=...)
     const params = new URLSearchParams(window.location.search);
     const lat = params.get('lat');
     const lon = params.get('lon');
@@ -97,17 +121,20 @@ export class WindForecastApp {
         // fallback
       }
     }
-    // Default preset (Ericeira)
     return PRESET_LOCATIONS[0];
   }
 
   private saveLocation(location: LocationInfo): void {
     localStorage.setItem('wind_forecast_last_location', JSON.stringify(location));
-    // Update URL query parameters without reloading
     const url = new URL(window.location.href);
     url.searchParams.set('lat', location.latitude.toFixed(4));
     url.searchParams.set('lon', location.longitude.toFixed(4));
     url.searchParams.set('name', location.name);
+    if (this.currentView === 'evolution') {
+      url.hash = '#evolution';
+    } else {
+      url.hash = '#ensemble';
+    }
     window.history.replaceState({}, '', url.toString());
   }
 
@@ -124,10 +151,17 @@ export class WindForecastApp {
 
   private async init(): Promise<void> {
     this.setupContainers();
+    this.setupNavigationTabs();
     this.saveLocation(this.currentLocation);
 
     window.addEventListener('popstate', () => {
       const newLoc = this.loadInitialLocation();
+      const newView = this.loadInitialView();
+
+      if (newView !== this.currentView) {
+        this.switchView(newView, false);
+      }
+
       if (
         newLoc.latitude !== this.currentLocation.latitude ||
         newLoc.longitude !== this.currentLocation.longitude ||
@@ -135,10 +169,21 @@ export class WindForecastApp {
       ) {
         this.currentLocation = newLoc;
         this.loadForecast();
+        if (this.currentView === 'evolution') {
+          this.loadRunEvolution();
+        }
       }
     });
 
+    // Initial view sync
+    this.updateTabUI();
+
+    // Start fetching data
     await this.loadForecast();
+
+    if (this.currentView === 'evolution') {
+      await this.loadRunEvolution();
+    }
   }
 
   private setupContainers(): void {
@@ -151,6 +196,100 @@ export class WindForecastApp {
     this.chart = new WindChart(chartContainer, {
       onHourSelect: (idx) => this.selectHour(idx)
     });
+
+    const evolutionContainer = document.getElementById('evolution-container')!;
+    this.evolutionView = new RunEvolutionView(evolutionContainer, {
+      onModelChange: (model) => {
+        this.evolutionModel = model;
+        this.loadRunEvolution();
+      },
+      onRefresh: () => {
+        this.handleRefresh();
+      }
+    });
+  }
+
+  /**
+   * Accessible Tab Navigation per Modern Web Guidance
+   */
+  private setupNavigationTabs(): void {
+    const tabEnsemble = document.getElementById('tab-ensemble');
+    const tabEvolution = document.getElementById('tab-evolution');
+
+    const tabs = [tabEnsemble, tabEvolution].filter(Boolean) as HTMLElement[];
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => {
+        const targetView: ViewMode = tab.id === 'tab-evolution' ? 'evolution' : 'ensemble';
+        this.switchView(targetView);
+      });
+
+      // Keyboard navigation: Left/Right arrow keys
+      tab.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextTab = tabs[(index + 1) % tabs.length];
+          nextTab.focus();
+          const targetView: ViewMode = nextTab.id === 'tab-evolution' ? 'evolution' : 'ensemble';
+          this.switchView(targetView);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevTab = tabs[(index - 1 + tabs.length) % tabs.length];
+          prevTab.focus();
+          const targetView: ViewMode = prevTab.id === 'tab-evolution' ? 'evolution' : 'ensemble';
+          this.switchView(targetView);
+        }
+      });
+    });
+  }
+
+  public switchView(view: ViewMode, updateHistory = true): void {
+    if (this.currentView === view && updateHistory) return;
+    this.currentView = view;
+    this.updateTabUI();
+
+    if (updateHistory) {
+      const url = new URL(window.location.href);
+      url.hash = view === 'evolution' ? '#evolution' : '#ensemble';
+      window.history.pushState({}, '', url.toString());
+    }
+
+    if (view === 'evolution') {
+      this.announce('Switched to Model Run Evolution Tracker view');
+      if (!this.evolutionResult) {
+        this.loadRunEvolution();
+      } else {
+        this.evolutionView?.update(
+          this.evolutionResult,
+          this.evolutionModel,
+          this.settings.speedUnit,
+          this.isEvolutionLoading
+        );
+      }
+    } else {
+      this.announce('Switched to Ensemble Forecast view');
+      this.renderAll();
+    }
+  }
+
+  private updateTabUI(): void {
+    const tabEnsemble = document.getElementById('tab-ensemble');
+    const tabEvolution = document.getElementById('tab-evolution');
+    const panelEnsemble = document.getElementById('panel-ensemble');
+    const panelEvolution = document.getElementById('panel-evolution');
+
+    const isEvolution = this.currentView === 'evolution';
+
+    tabEnsemble?.setAttribute('aria-selected', isEvolution ? 'false' : 'true');
+    tabEvolution?.setAttribute('aria-selected', isEvolution ? 'true' : 'false');
+
+    if (isEvolution) {
+      panelEnsemble?.setAttribute('hidden', '');
+      panelEvolution?.removeAttribute('hidden');
+    } else {
+      panelEnsemble?.removeAttribute('hidden');
+      panelEvolution?.setAttribute('hidden', '');
+    }
   }
 
   private async loadForecast(options?: { forceRefresh?: boolean; resetSelection?: boolean }): Promise<void> {
@@ -201,11 +340,58 @@ export class WindForecastApp {
     }
   }
 
+  public async loadRunEvolution(options?: { forceRefresh?: boolean }): Promise<void> {
+    this.isEvolutionLoading = true;
+    this.evolutionView?.update(
+      this.evolutionResult,
+      this.evolutionModel,
+      this.settings.speedUnit,
+      true
+    );
+    this.announce(`Fetching consecutive runs for ${this.evolutionModel} at ${this.currentLocation.name}...`);
+
+    try {
+      this.evolutionResult = await fetchRunEvolution(
+        this.currentLocation.latitude,
+        this.currentLocation.longitude,
+        this.currentLocation.name,
+        this.evolutionModel,
+        5,
+        options
+      );
+      this.announce(`Model runs loaded for ${this.evolutionResult.modelName}`);
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      console.warn('Single-runs API fetch failed, falling back to demo runs:', msg);
+      this.renderAlert(`Notice: Live model run archive fetch was unavailable (${msg}). Displaying simulated run evolution.`);
+      this.evolutionResult = generateDemoRunEvolution(
+        this.currentLocation.latitude,
+        this.currentLocation.longitude,
+        this.currentLocation.name,
+        this.evolutionModel,
+        5
+      );
+    } finally {
+      this.isEvolutionLoading = false;
+      this.evolutionView?.update(
+        this.evolutionResult,
+        this.evolutionModel,
+        this.settings.speedUnit,
+        false
+      );
+    }
+  }
+
   private async handleRefresh(): Promise<void> {
-    if (this.isLoading) return;
+    if (this.isLoading || this.isEvolutionLoading) return;
     clearOpenMeteoCache();
-    this.announce(`Cache cleared. Fetching latest forecast from Open-Meteo for ${this.currentLocation.name}...`);
-    await this.loadForecast({ forceRefresh: true });
+    this.announce(`Cache cleared. Fetching latest forecasts from Open-Meteo for ${this.currentLocation.name}...`);
+
+    if (this.currentView === 'evolution') {
+      await this.loadRunEvolution({ forceRefresh: true });
+    } else {
+      await this.loadForecast({ forceRefresh: true });
+    }
   }
 
   private selectHour(index: number): void {
@@ -232,7 +418,6 @@ export class WindForecastApp {
     this.settings.activeModels = newModels;
     this.saveSettings();
 
-    // Re-aggregate locally if we have raw modelValues in each hour
     if (this.forecastResult) {
       this.forecastResult.activeModels = newModels;
       this.forecastResult.hours = this.forecastResult.hours.map(h => {
@@ -265,6 +450,18 @@ export class WindForecastApp {
     this.renderLocationBar();
     this.renderStickyButton();
 
+    if (this.currentView === 'evolution') {
+      if (this.evolutionResult) {
+        this.evolutionView?.update(
+          this.evolutionResult,
+          this.evolutionModel,
+          this.settings.speedUnit,
+          this.isEvolutionLoading
+        );
+      }
+      return;
+    }
+
     if (!this.forecastResult) return;
 
     if (this.scrubber) {
@@ -288,6 +485,11 @@ export class WindForecastApp {
 
   private renderHeader(): void {
     const container = document.getElementById('header-container')!;
+    const isCached = this.currentView === 'evolution'
+      ? (this.evolutionResult?.isCached ?? false)
+      : (this.forecastResult?.isCached ?? false);
+    const isLoading = this.currentView === 'evolution' ? this.isEvolutionLoading : this.isLoading;
+
     renderHeader(
       container,
       this.settings,
@@ -297,6 +499,14 @@ export class WindForecastApp {
           this.settings.speedUnit = unit;
           this.saveSettings();
           this.renderAll();
+          if (this.evolutionResult) {
+            this.evolutionView?.update(
+              this.evolutionResult,
+              this.evolutionModel,
+              unit,
+              this.isEvolutionLoading
+            );
+          }
         },
         onTempUnitChange: (unit) => {
           this.settings.tempUnit = unit;
@@ -314,18 +524,23 @@ export class WindForecastApp {
           this.handleRefresh();
         }
       },
-      this.forecastResult?.isCached ?? false,
-      this.isLoading
+      isCached,
+      isLoading
     );
   }
 
   private renderStickyButton(): void {
     const container = document.getElementById('sticky-refresh-container');
     if (!container) return;
+    const isCached = this.currentView === 'evolution'
+      ? (this.evolutionResult?.isCached ?? false)
+      : (this.forecastResult?.isCached ?? false);
+    const isLoading = this.currentView === 'evolution' ? this.isEvolutionLoading : this.isLoading;
+
     renderStickyRefreshButton(
       container,
-      this.isLoading,
-      this.forecastResult?.isCached ?? false,
+      isLoading,
+      isCached,
       {
         onRefresh: () => {
           this.handleRefresh();
@@ -336,11 +551,16 @@ export class WindForecastApp {
 
   private renderLocationBar(): void {
     const container = document.getElementById('location-container')!;
-    renderLocationBar(container, this.currentLocation, this.isLoading, {
+    const isLoading = this.currentView === 'evolution' ? this.isEvolutionLoading : this.isLoading;
+
+    renderLocationBar(container, this.currentLocation, isLoading, {
       onLocationSelected: (location) => {
         this.currentLocation = location;
         this.saveLocation(location);
         this.loadForecast();
+        if (this.currentView === 'evolution' || this.evolutionResult) {
+          this.loadRunEvolution();
+        }
       },
       onError: (err) => {
         this.renderAlert(err);

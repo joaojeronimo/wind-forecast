@@ -100,3 +100,37 @@ export interface AppSettings {
   theme: 'dark' | 'light' | 'nautical';
   autoRefreshMinutes: number;
 }
+
+export type ViewMode = 'ensemble' | 'evolution';
+
+export interface SingleRunInfo {
+  runId: string;
+  initializationTime: Date;
+  label: string;
+  shortLabel: string;
+  relativeLabel: string;
+  offsetHours: number;
+  color: string;
+  isLatest: boolean;
+  hourly: {
+    time: string[];
+    windGusts: (number | null)[];
+    windSpeed: (number | null)[];
+  };
+  peakGust: number;
+  peakGustTime: string;
+}
+
+export interface RunEvolutionResult {
+  latitude: number;
+  longitude: number;
+  model: ModelId;
+  modelName: string;
+  agency: string;
+  locationName: string;
+  fetchedAt: Date;
+  runs: SingleRunInfo[];
+  timeline: string[];
+  isCached?: boolean;
+}
+

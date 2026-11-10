@@ -77,6 +77,7 @@ describe('Open-Meteo Cache Utility', () => {
   it('identifies Open-Meteo cache keys properly', () => {
     expect(isOpenMeteoCacheKey('https://api.open-meteo.com/v1/forecast?lat=1&lon=2')).toBe(true);
     expect(isOpenMeteoCacheKey('https://geocoding-api.open-meteo.com/v1/search?name=Lisbon')).toBe(true);
+    expect(isOpenMeteoCacheKey('https://single-runs-api.open-meteo.com/v1/forecast?models=ecmwf_ifs025&run=2026-11-10T06:00')).toBe(true);
     expect(isOpenMeteoCacheKey('wind_forecast_settings')).toBe(false);
     expect(isOpenMeteoCacheKey('wind_forecast_last_location')).toBe(false);
   });
