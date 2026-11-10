@@ -1,6 +1,7 @@
 import { AggregatedHour, SpeedUnit, ModelId } from '../types';
 import { AVAILABLE_MODELS } from '../api/openMeteo';
-import { convertSpeed, getSpeedUnitLabel } from '../utils/units';
+import { convertSpeed, convertSpeedToKmh, getSpeedUnitLabel } from '../utils/units';
+import { getBeaufort } from '../utils/beaufort';
 
 export interface WindChartCallbacks {
   onHourSelect: (index: number) => void;
@@ -72,9 +73,9 @@ export class WindChart {
 
   private getHorizontalPadding(width: number): { padLeft: number; padRight: number } {
     if (width < 480) {
-      return { padLeft: 38, padRight: 12 };
+      return { padLeft: 48, padRight: 14 };
     }
-    return { padLeft: 45, padRight: 20 };
+    return { padLeft: 56, padRight: 20 };
   }
 
   private setupEvents(): void {
@@ -158,7 +159,7 @@ export class WindChart {
     const rect = this.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = rect.width;
-    const height = Math.max(260, rect.height || 280);
+    const height = Math.max(240, rect.height || 280);
 
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
@@ -178,6 +179,8 @@ export class WindChart {
     const chartW = width - padLeft - padRight;
     const chartH = height - padTop - padBottom;
 
+    if (chartW <= 0 || chartH <= 0) return;
+
     // Determine max speed for Y-axis scaling based on Peak Gusts
     let maxGust = 10;
     for (const h of this.hours) {
@@ -189,25 +192,49 @@ export class WindChart {
     const getX = (i: number) => padLeft + (i / (this.hours.length - 1)) * chartW;
     const getY = (val: number) => padTop + chartH - (val / maxGust) * chartH;
 
-    // 1. Grid lines and Y-axis labels
+    // 1a. Beaufort Y-axis color strip
+    const yStripGrad = ctx.createLinearGradient(0, padTop + chartH, 0, padTop);
+    const stripSteps = 20;
+    for (let s = 0; s <= stripSteps; s++) {
+      const ratio = s / stripSteps;
+      const valKmh = convertSpeedToKmh(ratio * maxGust, this.speedUnit);
+      yStripGrad.addColorStop(ratio, getBeaufort(valKmh).color);
+    }
+    ctx.fillStyle = yStripGrad;
+    ctx.fillRect(padLeft - 3, padTop, 3, chartH);
+
+    // 1b. Beaufort X-axis color baseline strip
+    if (this.hours.length > 1) {
+      const xStripGrad = ctx.createLinearGradient(padLeft, 0, padLeft + chartW, 0);
+      const maxHIdx = this.hours.length - 1;
+      for (let i = 0; i <= maxHIdx; i++) {
+        xStripGrad.addColorStop(i / maxHIdx, this.hours[i].beaufort.color);
+      }
+      ctx.fillStyle = xStripGrad;
+      ctx.fillRect(padLeft, padTop + chartH, chartW, 3);
+    }
+
+    // 1c. Grid lines and Y-axis labels colored by Beaufort scale
     const yTicks = 5;
-    ctx.font = width < 480 ? '10px sans-serif' : '11px sans-serif';
+    ctx.font = width < 480 ? 'bold 10px sans-serif' : 'bold 11px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
     for (let t = 0; t <= yTicks; t++) {
-      const tickVal = (maxGust / yTicks) * t;
+      const tickVal = Math.round((maxGust / yTicks) * t);
       const y = getY(tickVal);
+      const tickKmh = convertSpeedToKmh(tickVal, this.speedUnit);
+      const bftColor = getBeaufort(tickKmh).color;
 
-      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+      ctx.strokeStyle = isDark ? `${bftColor}26` : `${bftColor}33`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(padLeft, y);
       ctx.lineTo(width - padRight, y);
       ctx.stroke();
 
-      ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
-      ctx.fillText(`${tickVal.toFixed(0)} ${getSpeedUnitLabel(this.speedUnit)}`, padLeft - 6, y);
+      ctx.fillStyle = bftColor;
+      ctx.fillText(`${tickVal} ${getSpeedUnitLabel(this.speedUnit)}`, padLeft - 7, y);
     }
 
     // 2. Spread Corridor for Gusts (Min to Max confidence band)
@@ -301,7 +328,7 @@ export class WindChart {
         ctx.save();
         ctx.translate(x, arrowY);
         ctx.rotate(arrowRot);
-        ctx.fillStyle = isDark ? '#e2e8f0' : '#334155';
+        ctx.fillStyle = h.beaufort.color;
         ctx.beginPath();
         ctx.moveTo(0, -6);
         ctx.lineTo(4, 5);
@@ -311,8 +338,8 @@ export class WindChart {
         ctx.fill();
         ctx.restore();
 
-        ctx.font = '10px sans-serif';
-        ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillStyle = h.beaufort.color;
         const labelX = i === maxIdx && width < 480 ? Math.min(x, width - 16) : x;
         ctx.fillText(h.hourLabel, labelX, padTop + chartH + 30);
       }

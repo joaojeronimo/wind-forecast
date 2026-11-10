@@ -1,5 +1,6 @@
 import { RunEvolutionResult, SingleRunInfo, SpeedUnit } from '../../types';
-import { convertSpeed, formatSpeed, getSpeedUnitLabel } from '../../utils/units';
+import { convertSpeed, convertSpeedToKmh, formatSpeed, getSpeedUnitLabel } from '../../utils/units';
+import { getBeaufort } from '../../utils/beaufort';
 
 export interface RunEvolutionChartCallbacks {
   onHourSelect: (targetTime: string) => void;
@@ -71,9 +72,9 @@ export class RunEvolutionChart {
 
   private getHorizontalPadding(width: number): { padLeft: number; padRight: number } {
     if (width < 480) {
-      return { padLeft: 38, padRight: 12 };
+      return { padLeft: 48, padRight: 14 };
     }
-    return { padLeft: 45, padRight: 20 };
+    return { padLeft: 56, padRight: 20 };
   }
 
   private setupEvents(): void {
@@ -197,9 +198,12 @@ export class RunEvolutionChart {
 
     ctx.clearRect(0, 0, width, height);
 
+    const isDark = document.body.classList.contains('theme-dark') ||
+      (!document.body.classList.contains('theme-light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
     const { padLeft, padRight } = this.getHorizontalPadding(width);
     const padTop = 22;
-    const padBottom = 34;
+    const padBottom = 38;
     const chartWidth = width - padLeft - padRight;
     const chartHeight = height - padTop - padBottom;
 
@@ -236,60 +240,116 @@ export class RunEvolutionChart {
     const getX = (index: number) => padLeft + (index / (n - 1)) * chartWidth;
     const getY = (valDisplay: number) => padTop + chartHeight - (valDisplay / yAxisMax) * chartHeight;
 
-    // Draw horizontal grid lines & Y labels
+    // Helper to get representative km/h at timeline index (latest active run or max across active runs)
+    const getRepresentativeKmh = (idx: number): number => {
+      const latestRun = activeRuns[0];
+      if (latestRun) {
+        const latestVals = runValuesMap.get(latestRun.runId);
+        const lv = latestVals?.[idx];
+        if (lv !== null && lv !== undefined) return lv;
+      }
+      let maxVal = 0;
+      for (const run of activeRuns) {
+        const v = runValuesMap.get(run.runId)?.[idx];
+        if (v !== null && v !== undefined && v > maxVal) maxVal = v;
+      }
+      return maxVal;
+    };
+
+    // 1a. Beaufort Y-axis color strip
+    const yStripGrad = ctx.createLinearGradient(0, padTop + chartHeight, 0, padTop);
+    const stripSteps = 20;
+    for (let s = 0; s <= stripSteps; s++) {
+      const ratio = s / stripSteps;
+      const valKmh = convertSpeedToKmh(ratio * yAxisMax, this.speedUnit);
+      yStripGrad.addColorStop(ratio, getBeaufort(valKmh).color);
+    }
+    ctx.fillStyle = yStripGrad;
+    ctx.fillRect(padLeft - 3, padTop, 3, chartHeight);
+
+    // 1b. Beaufort X-axis color baseline strip
+    if (n > 1) {
+      const xStripGrad = ctx.createLinearGradient(padLeft, 0, padLeft + chartWidth, 0);
+      for (let i = 0; i < n; i++) {
+        const kmh = getRepresentativeKmh(i);
+        xStripGrad.addColorStop(i / (n - 1), getBeaufort(kmh).color);
+      }
+      ctx.fillStyle = xStripGrad;
+      ctx.fillRect(padLeft, padTop + chartHeight, chartWidth, 3);
+    }
+
+    // 1c. Draw horizontal grid lines & Y labels colored by Beaufort scale
     const gridSteps = 4;
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.fillStyle = 'rgba(160, 174, 192, 0.8)';
-    ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = width < 480
+      ? 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      : 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
     for (let i = 0; i <= gridSteps; i++) {
       const stepVal = Math.round((yAxisMax / gridSteps) * i);
       const y = getY(stepVal);
+      const stepKmh = convertSpeedToKmh(stepVal, this.speedUnit);
+      const bftColor = getBeaufort(stepKmh).color;
+
+      ctx.strokeStyle = isDark ? `${bftColor}26` : `${bftColor}33`;
       ctx.beginPath();
       ctx.moveTo(padLeft, y);
       ctx.lineTo(width - padRight, y);
       ctx.stroke();
 
-      ctx.fillText(`${stepVal} ${i === gridSteps ? unitLabel : ''}`, padLeft - 6, y);
+      ctx.fillStyle = bftColor;
+      ctx.fillText(`${stepVal} ${unitLabel}`, padLeft - 7, y);
     }
 
-    // Draw Day divider lines & X-axis labels
+    // 2. Draw Day divider lines & X-axis labels colored by Beaufort scale
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     let lastDateStr = '';
+    let lastDateLabelRight = -Infinity;
+    const hourInterval = chartWidth >= 600 ? 6 : 12;
 
     for (let i = 0; i < n; i++) {
       const t = timeline[i];
       const d = new Date(t);
       const dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
       const x = getX(i);
+      const hourKmh = getRepresentativeKmh(i);
+      const bftColor = getBeaufort(hourKmh).color;
 
       if (dateStr !== lastDateStr && i > 0) {
         ctx.beginPath();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.22)';
         ctx.setLineDash([3, 3]);
         ctx.moveTo(x, padTop);
         ctx.lineTo(x, padTop + chartHeight);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
-        ctx.fillText(dateStr, x, padTop + chartHeight + 16);
+        if (x - 28 > lastDateLabelRight) {
+          ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+          const clampedX = Math.max(padLeft + 24, Math.min(width - padRight - 24, x));
+          ctx.fillText(dateStr, clampedX, padTop + chartHeight + 18);
+          lastDateLabelRight = clampedX + 34;
+        }
         lastDateStr = dateStr;
       } else if (i === 0) {
         lastDateStr = dateStr;
-        ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
-        ctx.fillText(dateStr, x + 20, padTop + chartHeight + 16);
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+        const firstX = padLeft + 24;
+        ctx.fillText(dateStr, firstX, padTop + chartHeight + 18);
+        lastDateLabelRight = firstX + 34;
       }
 
-      // Time labels every 6 hours
+      // Time labels on X-axis colored with Beaufort scale
       const hour = d.getHours();
-      if (hour % 6 === 0) {
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.7)';
-        ctx.fillText(`${String(hour).padStart(2, '0')}:00`, x, padTop + chartHeight + 4);
+      if (hour % hourInterval === 0) {
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = bftColor;
+        ctx.fillText(`${String(hour).padStart(2, '0')}:00`, x, padTop + chartHeight + 5);
       }
     }
 

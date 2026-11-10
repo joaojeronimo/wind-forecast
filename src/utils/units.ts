@@ -23,6 +23,24 @@ export function convertSpeed(kmh: number, unit: SpeedUnit): number {
 }
 
 /**
+ * Convert wind speed from display unit back to base unit (km/h)
+ */
+export function convertSpeedToKmh(value: number, unit: SpeedUnit): number {
+  if (isNaN(value) || value < 0) return 0;
+  switch (unit) {
+    case 'knots':
+      return value / KMH_TO_KNOTS;
+    case 'ms':
+      return value / KMH_TO_MS;
+    case 'mph':
+      return value / KMH_TO_MPH;
+    case 'kmh':
+    default:
+      return value;
+  }
+}
+
+/**
  * Format speed with decimal places and unit suffix
  */
 export function formatSpeed(kmh: number, unit: SpeedUnit, precision = 1): string {
