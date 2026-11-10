@@ -123,10 +123,10 @@ export async function fetchWindForecast(
     const modelMap: Partial<Record<ModelId, ModelDataPoint>> = {};
 
     for (const model of modelsToQuery) {
-      const gustKey = `wind_gusts_10m_${model}`;
-      const speedKey = `wind_speed_10m_${model}`;
-      const dirKey = `wind_direction_10m_${model}`;
-      const tempKey = `temperature_2m_${model}`;
+      const gustKey = hourly[`wind_gusts_10m_${model}`] !== undefined ? `wind_gusts_10m_${model}` : 'wind_gusts_10m';
+      const speedKey = hourly[`wind_speed_10m_${model}`] !== undefined ? `wind_speed_10m_${model}` : 'wind_speed_10m';
+      const dirKey = hourly[`wind_direction_10m_${model}`] !== undefined ? `wind_direction_10m_${model}` : 'wind_direction_10m';
+      const tempKey = hourly[`temperature_2m_${model}`] !== undefined ? `temperature_2m_${model}` : 'temperature_2m';
 
       const rawGust = hourly[gustKey]?.[absoluteIndex];
       const rawSpeed = hourly[speedKey]?.[absoluteIndex];

@@ -139,7 +139,7 @@ export class WindChart {
         <span class="legend-swatch mean-swatch"></span>
         <span>Consensus Mean Gust</span>
       </div>
-      ${this.activeModelIds.slice(0, 5).map(id => {
+      ${this.activeModelIds.map(id => {
         const m = modelLookup.get(id);
         if (!m) return '';
         return `

@@ -127,4 +127,32 @@ describe('fetchWindForecast caching integration', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(resultAfterClear.isCached).toBe(false);
   });
+
+  it('correctly handles single-model response without model suffix', async () => {
+    const singleModelResponse = {
+      latitude: 38.7167,
+      longitude: -9.139,
+      timezone: 'Europe/Lisbon',
+      elevation: 50,
+      hourly: {
+        time: ['2026-11-10T12:00', '2026-11-10T13:00'],
+        wind_gusts_10m: [42, 45],
+        wind_speed_10m: [25, 28],
+        wind_direction_10m: [180, 190],
+        temperature_2m: [20, 21]
+      }
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => singleModelResponse
+    } as Response);
+
+    const result = await fetchWindForecast(38.7167, -9.139, 'Lisbon', ['ecmwf_ifs025']);
+    expect(result.hours.length).toBeGreaterThan(0);
+    expect(result.hours[0].reportingModelsCount).toBe(1);
+    expect(result.hours[0].modelValues.ecmwf_ifs025?.gust).toBe(42);
+    expect(result.hours[0].modelValues.ecmwf_ifs025?.speed).toBe(25);
+    expect(result.hours[0].modelValues.ecmwf_ifs025?.direction).toBe(180);
+  });
 });
