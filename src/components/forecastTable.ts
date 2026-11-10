@@ -1,5 +1,5 @@
 import { AggregatedHour, SpeedUnit, TempUnit } from '../types';
-import { formatSpeed, formatTemp, convertSpeed } from '../utils/units';
+import { formatSpeed, formatTemp, convertSpeed, getSpeedUnitLabel } from '../utils/units';
 
 export interface ForecastTableCallbacks {
   onHourSelect: (index: number) => void;
@@ -78,13 +78,13 @@ export function renderForecastTable(
                   <td class="col-speed">
                     <div class="speed-cell-content">
                       <span class="speed-val-bold gust-val-hero">${convertSpeed(h.gustMax, speedUnit).toFixed(1)}</span>
-                      <span class="speed-unit-dim">${speedUnit}</span>
+                      <span class="speed-unit-dim">${getSpeedUnitLabel(speedUnit)}</span>
                     </div>
                   </td>
 
                   <!-- Consensus Mean Gust -->
                   <td class="col-speed-mean">
-                    <span class="gust-mean-val">${convertSpeed(h.gustMean, speedUnit).toFixed(1)} ${speedUnit}</span>
+                    <span class="gust-mean-val">${convertSpeed(h.gustMean, speedUnit).toFixed(1)} ${getSpeedUnitLabel(speedUnit)}</span>
                   </td>
 
                   <!-- Spread Min-Max -->

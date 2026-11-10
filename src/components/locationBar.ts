@@ -1,5 +1,5 @@
 import { LocationInfo } from '../types';
-import { PRESET_LOCATIONS } from '../utils/presets';
+import { getPopularSpots, addSearchedSpot, isLocationActive } from '../utils/presets';
 import { searchLocations, requestBrowserLocation } from '../api/geocoding';
 
 export interface LocationBarCallbacks {
@@ -13,6 +13,8 @@ export function renderLocationBar(
   isLoadingLocation: boolean,
   callbacks: LocationBarCallbacks
 ): void {
+  const popularSpots = getPopularSpots();
+
   container.innerHTML = `
     <section class="location-bar-section" aria-label="Location and Spot Selection">
       <div class="location-primary-row">
@@ -71,12 +73,12 @@ export function renderLocationBar(
       <div class="presets-row" role="region" aria-label="Popular Wind Spots">
         <span class="presets-label">Popular Spots:</span>
         <div class="presets-list">
-          ${PRESET_LOCATIONS.map((preset, idx) => `
+          ${popularSpots.map((preset, idx) => `
             <button
               type="button"
-              class="preset-chip ${preset.name === currentLocation.name ? 'active' : ''}"
+              class="preset-chip ${isLocationActive(preset, currentLocation) ? 'active' : ''}"
               data-preset-idx="${idx}"
-              title="${preset.name}, ${preset.country || ''}"
+              title="${preset.name}${preset.country ? `, ${preset.country}` : ''}"
             >
               ${preset.name.split(' (')[0]}
             </button>
@@ -116,7 +118,7 @@ export function renderLocationBar(
   container.querySelectorAll<HTMLButtonElement>('[data-preset-idx]').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.getAttribute('data-preset-idx') || '0', 10);
-      const preset = PRESET_LOCATIONS[idx];
+      const preset = popularSpots[idx];
       if (preset) {
         callbacks.onLocationSelected(preset);
       }
@@ -128,6 +130,24 @@ export function renderLocationBar(
   const dropdown = container.querySelector<HTMLDivElement>('#location-results-dropdown');
   const clearBtn = container.querySelector<HTMLButtonElement>('#search-clear-btn');
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let currentResults: LocationInfo[] = [];
+
+  const handleSelectLocation = (chosen: LocationInfo) => {
+    if (dropdown) {
+      dropdown.style.display = 'none';
+      dropdown.innerHTML = '';
+    }
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.setAttribute('aria-expanded', 'false');
+    }
+    if (clearBtn) {
+      clearBtn.style.display = 'none';
+    }
+    currentResults = [];
+    addSearchedSpot(chosen);
+    callbacks.onLocationSelected(chosen);
+  };
 
   if (searchInput && dropdown && clearBtn) {
     searchInput.addEventListener('input', () => {
@@ -139,6 +159,7 @@ export function renderLocationBar(
         dropdown.style.display = 'none';
         dropdown.innerHTML = '';
         searchInput.setAttribute('aria-expanded', 'false');
+        currentResults = [];
         return;
       }
 
@@ -148,6 +169,7 @@ export function renderLocationBar(
         searchInput.setAttribute('aria-expanded', 'true');
 
         const results = await searchLocations(query);
+        currentResults = results;
         if (results.length === 0) {
           dropdown.innerHTML = '<div class="dropdown-item muted">No places found. Try another search.</div>';
           return;
@@ -165,11 +187,7 @@ export function renderLocationBar(
             const idx = parseInt(item.getAttribute('data-idx') || '0', 10);
             const chosen = results[idx];
             if (chosen) {
-              dropdown.style.display = 'none';
-              searchInput.value = '';
-              clearBtn.style.display = 'none';
-              searchInput.setAttribute('aria-expanded', 'false');
-              callbacks.onLocationSelected(chosen);
+              handleSelectLocation(chosen);
             }
           };
 
@@ -184,11 +202,36 @@ export function renderLocationBar(
       }, 300);
     });
 
+    searchInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentResults.length > 0) {
+          handleSelectLocation(currentResults[0]);
+          return;
+        }
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          dropdown.innerHTML = '<div class="dropdown-item muted">Searching places...</div>';
+          dropdown.style.display = 'block';
+          searchInput.setAttribute('aria-expanded', 'true');
+          const results = await searchLocations(query);
+          currentResults = results;
+          if (results.length > 0) {
+            handleSelectLocation(results[0]);
+          } else {
+            dropdown.innerHTML = '<div class="dropdown-item muted">No places found. Try another search.</div>';
+          }
+        }
+      }
+    });
+
     clearBtn.addEventListener('click', () => {
       searchInput.value = '';
       clearBtn.style.display = 'none';
       dropdown.style.display = 'none';
       searchInput.setAttribute('aria-expanded', 'false');
+      currentResults = [];
       searchInput.focus();
     });
 

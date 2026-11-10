@@ -7,7 +7,7 @@ import {
   TempUnit,
   ModelId
 } from './types';
-import { AVAILABLE_MODELS, fetchWindForecast, generateDemoForecast } from './api/openMeteo';
+import { AVAILABLE_MODELS, fetchWindForecast, generateDemoForecast, clearOpenMeteoCache } from './api/openMeteo';
 import { PRESET_LOCATIONS } from './utils/presets';
 import { renderHeader } from './components/header';
 import { renderLocationBar } from './components/locationBar';
@@ -16,6 +16,7 @@ import { renderCurrentFocusCard } from './components/currentFocusCard';
 import { WindChart } from './components/windChart';
 import { renderModelSelector } from './components/modelSelector';
 import { renderForecastTable } from './components/forecastTable';
+import { renderStickyRefreshButton } from './components/stickyRefreshButton';
 import { aggregateHour } from './utils/aggregation';
 
 class WindForecastApp {
@@ -39,21 +40,27 @@ class WindForecastApp {
   }
 
   private loadSettings(): AppSettings {
-    const saved = localStorage.getItem('wind_forecast_settings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        // fallback
-      }
-    }
-    return {
-      speedUnit: 'knots',
+    const defaultSettings: AppSettings = {
+      speedUnit: 'kmh',
       tempUnit: 'celsius',
       activeModels: AVAILABLE_MODELS.map(m => m.id),
       theme: 'dark',
       autoRefreshMinutes: 30
     };
+
+    const saved = localStorage.getItem('wind_forecast_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultSettings,
+          ...parsed
+        };
+      } catch {
+        // fallback
+      }
+    }
+    return defaultSettings;
   }
 
   private saveSettings(): void {
@@ -81,12 +88,15 @@ class WindForecastApp {
     const saved = localStorage.getItem('wind_forecast_last_location');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.name !== 'Guincho Beach (Cascais)') {
+          return parsed;
+        }
       } catch {
         // fallback
       }
     }
-    // Default preset
+    // Default preset (Ericeira)
     return PRESET_LOCATIONS[0];
   }
 
@@ -113,6 +123,20 @@ class WindForecastApp {
 
   private async init(): Promise<void> {
     this.setupContainers();
+    this.saveLocation(this.currentLocation);
+
+    window.addEventListener('popstate', () => {
+      const newLoc = this.loadInitialLocation();
+      if (
+        newLoc.latitude !== this.currentLocation.latitude ||
+        newLoc.longitude !== this.currentLocation.longitude ||
+        newLoc.name !== this.currentLocation.name
+      ) {
+        this.currentLocation = newLoc;
+        this.loadForecast();
+      }
+    });
+
     await this.loadForecast();
   }
 
@@ -128,7 +152,7 @@ class WindForecastApp {
     });
   }
 
-  private async loadForecast(): Promise<void> {
+  private async loadForecast(options?: { forceRefresh?: boolean }): Promise<void> {
     this.isLoading = true;
     this.renderAlert(null);
     this.renderAll();
@@ -139,10 +163,16 @@ class WindForecastApp {
         this.currentLocation.latitude,
         this.currentLocation.longitude,
         this.currentLocation.name,
-        this.settings.activeModels
+        this.settings.activeModels,
+        3,
+        options
       );
-      this.lastUpdated = new Date();
-      this.announce(`Gust forecast updated for ${this.currentLocation.name}`);
+      this.lastUpdated = this.forecastResult.fetchedAt;
+      if (this.forecastResult.isCached) {
+        this.announce(`Gust forecast loaded from 15-minute cache for ${this.currentLocation.name}`);
+      } else {
+        this.announce(`Gust forecast updated for ${this.currentLocation.name}`);
+      }
     } catch (err: unknown) {
       const msg = (err as Error).message;
       console.warn('Live API fetch failed, falling back to demo mode:', msg);
@@ -162,6 +192,13 @@ class WindForecastApp {
       }
       this.renderAll();
     }
+  }
+
+  private async handleRefresh(): Promise<void> {
+    if (this.isLoading) return;
+    clearOpenMeteoCache();
+    this.announce(`Cache cleared. Fetching latest forecast from Open-Meteo for ${this.currentLocation.name}...`);
+    await this.loadForecast({ forceRefresh: true });
   }
 
   private selectHour(index: number): void {
@@ -219,6 +256,7 @@ class WindForecastApp {
   private renderAll(): void {
     this.renderHeader();
     this.renderLocationBar();
+    this.renderStickyButton();
 
     if (!this.forecastResult) return;
 
@@ -243,28 +281,50 @@ class WindForecastApp {
 
   private renderHeader(): void {
     const container = document.getElementById('header-container')!;
-    renderHeader(container, this.settings, this.lastUpdated, {
-      onSpeedUnitChange: (unit) => {
-        this.settings.speedUnit = unit;
-        this.saveSettings();
-        this.renderAll();
+    renderHeader(
+      container,
+      this.settings,
+      this.lastUpdated,
+      {
+        onSpeedUnitChange: (unit) => {
+          this.settings.speedUnit = unit;
+          this.saveSettings();
+          this.renderAll();
+        },
+        onTempUnitChange: (unit) => {
+          this.settings.tempUnit = unit;
+          this.saveSettings();
+          this.renderAll();
+        },
+        onThemeToggle: () => {
+          const nextTheme = this.settings.theme === 'dark' ? 'light' : 'dark';
+          this.settings.theme = nextTheme;
+          this.applyTheme(nextTheme);
+          this.saveSettings();
+          this.renderAll();
+        },
+        onRefresh: () => {
+          this.handleRefresh();
+        }
       },
-      onTempUnitChange: (unit) => {
-        this.settings.tempUnit = unit;
-        this.saveSettings();
-        this.renderAll();
-      },
-      onThemeToggle: () => {
-        const nextTheme = this.settings.theme === 'dark' ? 'light' : 'dark';
-        this.settings.theme = nextTheme;
-        this.applyTheme(nextTheme);
-        this.saveSettings();
-        this.renderAll();
-      },
-      onRefresh: () => {
-        this.loadForecast();
+      this.forecastResult?.isCached ?? false,
+      this.isLoading
+    );
+  }
+
+  private renderStickyButton(): void {
+    const container = document.getElementById('sticky-refresh-container');
+    if (!container) return;
+    renderStickyRefreshButton(
+      container,
+      this.isLoading,
+      this.forecastResult?.isCached ?? false,
+      {
+        onRefresh: () => {
+          this.handleRefresh();
+        }
       }
-    });
+    );
   }
 
   private renderLocationBar(): void {

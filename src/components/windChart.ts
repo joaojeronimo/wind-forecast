@@ -12,7 +12,7 @@ export class WindChart {
   private ctx: CanvasRenderingContext2D | null;
   private hours: AggregatedHour[] = [];
   private selectedIndex = 0;
-  private speedUnit: SpeedUnit = 'knots';
+  private speedUnit: SpeedUnit = 'kmh';
   private activeModelIds: ModelId[] = [];
   private callbacks: WindChartCallbacks;
   private resizeObserver: ResizeObserver | null = null;

@@ -11,7 +11,9 @@ export function renderHeader(
   container: HTMLElement,
   settings: AppSettings,
   lastUpdated: Date | null,
-  callbacks: HeaderCallbacks
+  callbacks: HeaderCallbacks,
+  isCached = false,
+  isLoading = false
 ): void {
   const timeStr = lastUpdated
     ? lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -51,11 +53,11 @@ export function renderHeader(
         </fieldset>
 
         <!-- Refresh Button -->
-        <button type="button" class="icon-btn refresh-btn" id="refresh-data-btn" title="Refresh gust forecast" aria-label="Refresh gust forecast (updated ${timeStr})">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button type="button" class="icon-btn refresh-btn ${isLoading ? 'loading' : ''}" id="refresh-data-btn" title="Refresh gust forecast (clears cache)" aria-label="Refresh gust forecast (updated ${timeStr}${isCached ? ', cached' : ''})" ${isLoading ? 'disabled' : ''}>
+          <svg class="${isLoading ? 'spin' : ''}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
-          <span class="refresh-time" aria-hidden="true">${timeStr}</span>
+          <span class="refresh-time" aria-hidden="true">${timeStr}${isCached ? ' (cached)' : ''}</span>
         </button>
 
         <!-- Theme Toggle -->

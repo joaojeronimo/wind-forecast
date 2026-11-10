@@ -9,7 +9,7 @@ export class TimeScrubber {
   private container: HTMLElement;
   private hours: AggregatedHour[] = [];
   private selectedIndex = 0;
-  private speedUnit: SpeedUnit = 'knots';
+  private speedUnit: SpeedUnit = 'kmh';
   private isPlaying = false;
   private playIntervalId: ReturnType<typeof setInterval> | null = null;
   private callbacks: TimeScrubberCallbacks;

@@ -5,6 +5,14 @@ import {
   ForecastResult
 } from '../types';
 import { aggregateHour } from '../utils/aggregation';
+import {
+  getCachedData,
+  setCachedData,
+  deleteCachedData,
+  clearOpenMeteoCache
+} from '../utils/cache';
+
+export { clearOpenMeteoCache };
 
 export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'best_match', name: 'Best Match', agency: 'Open-Meteo Blend', resolution: '1-11 km', color: '#0284c7', enabled: true },
@@ -21,7 +29,8 @@ export async function fetchWindForecast(
   longitude: number,
   locationName: string,
   modelsToQuery: ModelId[] = AVAILABLE_MODELS.map(m => m.id),
-  forecastDays = 3
+  forecastDays = 3,
+  options?: { forceRefresh?: boolean }
 ): Promise<ForecastResult> {
   const modelsParam = modelsToQuery.join(',');
   const hourlyVariables = [
@@ -39,34 +48,60 @@ export async function fetchWindForecast(
   url.searchParams.set('models', modelsParam);
   url.searchParams.set('wind_speed_unit', 'kmh'); // We fetch in base km/h and convert client-side
   url.searchParams.set('timezone', 'auto');
+  url.searchParams.sort();
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const urlString = url.toString();
+  let data: any = null;
+  let fetchedAt = new Date();
+  let isCached = false;
 
-  let response: Response;
-  try {
-    response = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-  } catch (err: unknown) {
-    clearTimeout(timeoutId);
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Open-Meteo request timed out. Please check your internet connection.');
+  // Check 15-minute cache unless a forceRefresh is explicitly requested
+  if (!options?.forceRefresh) {
+    const cached = getCachedData<any>(urlString);
+    if (cached) {
+      data = cached.data;
+      fetchedAt = new Date(cached.timestamp);
+      isCached = true;
     }
-    throw new Error(`Network error calling Open-Meteo: ${(err as Error).message}`);
-  } finally {
-    clearTimeout(timeoutId);
   }
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`Open-Meteo API returned HTTP ${response.status}: ${errorBody || response.statusText}`);
-  }
+  // If not cached or force refreshing, fetch from Open-Meteo API
+  if (!data) {
+    if (options?.forceRefresh) {
+      deleteCachedData(urlString);
+    }
 
-  const data = await response.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    let response: Response;
+    try {
+      response = await fetch(urlString, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Open-Meteo request timed out. Please check your internet connection.');
+      }
+      throw new Error(`Network error calling Open-Meteo: ${(err as Error).message}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(`Open-Meteo API returned HTTP ${response.status}: ${errorBody || response.statusText}`);
+    }
+
+    data = await response.json();
+    setCachedData(urlString, data);
+    fetchedAt = new Date();
+    isCached = false;
+  }
   const hourly = data.hourly;
   if (!hourly || !Array.isArray(hourly.time)) {
     throw new Error('Unexpected response format from Open-Meteo API: missing hourly data.');
@@ -120,10 +155,11 @@ export async function fetchWindForecast(
     longitude: data.longitude,
     timezone: data.timezone || 'UTC',
     elevation: data.elevation || 0,
-    fetchedAt: new Date(),
+    fetchedAt,
     locationName,
     hours,
-    activeModels: modelsToQuery
+    activeModels: modelsToQuery,
+    isCached
   };
 }
 
@@ -179,6 +215,7 @@ export function generateDemoForecast(
     fetchedAt: new Date(),
     locationName: `${locationName} (Demo Mode)`,
     hours,
-    activeModels: models
+    activeModels: models,
+    isCached: false
   };
 }

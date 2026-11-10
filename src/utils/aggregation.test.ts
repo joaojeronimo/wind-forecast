@@ -6,7 +6,7 @@ import {
   calculateMedian,
   aggregateHour
 } from './aggregation';
-import { convertSpeed, convertTemp } from './units';
+import { convertSpeed, convertTemp, formatSpeed, getSpeedUnitLabel } from './units';
 
 describe('Wind Direction Vector Math', () => {
   it('correctly calculates vector average across the 360/0 degree boundary', () => {
@@ -37,6 +37,18 @@ describe('Unit Conversions', () => {
   it('converts km/h to knots properly', () => {
     const knots = convertSpeed(10, 'knots');
     expect(knots).toBeCloseTo(5.399, 1);
+  });
+
+  it('keeps base km/h values unchanged', () => {
+    expect(convertSpeed(25, 'kmh')).toBe(25);
+    expect(formatSpeed(25, 'kmh', 1)).toBe('25.0 km/h');
+  });
+
+  it('provides correct speed unit labels', () => {
+    expect(getSpeedUnitLabel('kmh')).toBe('km/h');
+    expect(getSpeedUnitLabel('knots')).toBe('kts');
+    expect(getSpeedUnitLabel('ms')).toBe('m/s');
+    expect(getSpeedUnitLabel('mph')).toBe('mph');
   });
 
   it('converts Celsius to Fahrenheit properly', () => {

@@ -1293,3 +1293,99 @@ body.theme-light .forecast-data-table tbody th {
 .app-footer a:hover {
   text-decoration: underline;
 }
+
+/* Sticky Floating Refresh Button in Bottom-Right Corner */
+.sticky-refresh-container {
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.75rem;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.sticky-refresh-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.15rem;
+  font-family: var(--font-family);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0b1329;
+  background-color: var(--accent-cyan);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 20px rgba(56, 189, 248, 0.25);
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+  backdrop-filter: blur(8px);
+}
+
+.sticky-refresh-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 26px rgba(56, 189, 248, 0.4);
+  filter: brightness(1.08);
+}
+
+.sticky-refresh-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sticky-refresh-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+body.theme-light .sticky-refresh-btn {
+  background-color: var(--accent-blue);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 0 15px rgba(2, 132, 199, 0.2);
+}
+
+body.theme-light .sticky-refresh-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 0 22px rgba(2, 132, 199, 0.3);
+}
+
+.sticky-refresh-icon {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sticky-refresh-label {
+  letter-spacing: 0.01em;
+}
+
+.sticky-cache-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  background-color: rgba(11, 19, 41, 0.2);
+  color: #0b1329;
+  border: 1px solid rgba(11, 19, 41, 0.15);
+}
+
+body.theme-light .sticky-cache-badge {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 640px) {
+  .sticky-refresh-container {
+    bottom: 1.25rem;
+    right: 1.25rem;
+  }
+
+  .sticky-refresh-btn {
+    padding: 0.65rem 1rem;
+    font-size: 0.8125rem;
+  }
+}
+

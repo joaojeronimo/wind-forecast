@@ -81,6 +81,7 @@ export interface ForecastResult {
   locationName: string;
   hours: AggregatedHour[];
   activeModels: ModelId[];
+  isCached?: boolean;
 }
 
 export interface LocationInfo {

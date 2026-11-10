@@ -1,6 +1,6 @@
 import { AggregatedHour, SpeedUnit, TempUnit, ModelId } from '../types';
 import { AVAILABLE_MODELS } from '../api/openMeteo';
-import { formatSpeed, formatTemp, convertSpeed } from '../utils/units';
+import { formatSpeed, formatTemp, convertSpeed, getSpeedUnitLabel } from '../utils/units';
 
 export function renderCurrentFocusCard(
   container: HTMLElement,
@@ -35,7 +35,7 @@ export function renderCurrentFocusCard(
         </div>
 
         <div class="focus-badges">
-          <span class="badge ${consensusClass}" title="Gust standard deviation: ±${convertSpeed(hour.gustStdDev, speedUnit).toFixed(1)} ${speedUnit}">
+          <span class="badge ${consensusClass}" title="Gust standard deviation: ±${convertSpeed(hour.gustStdDev, speedUnit).toFixed(1)} ${getSpeedUnitLabel(speedUnit)}">
             ${consensusText} (±${convertSpeed(hour.gustStdDev, speedUnit).toFixed(1)})
           </span>
           <span class="badge badge-beaufort" style="background-color: ${hour.beaufort.color}22; color: ${hour.beaufort.color}; border: 1px solid ${hour.beaufort.color}44">
@@ -70,7 +70,7 @@ export function renderCurrentFocusCard(
           <div class="speed-main-display">
             <span class="speed-number">${convertSpeed(hour.gustMax, speedUnit).toFixed(1)}</span>
             <div class="speed-label-stack">
-              <span class="speed-unit-label">${speedUnit === 'knots' ? 'knots' : speedUnit}</span>
+              <span class="speed-unit-label">${speedUnit === 'knots' ? 'knots' : getSpeedUnitLabel(speedUnit)}</span>
               <span class="gust-hero-tag">PEAK GUST</span>
             </div>
           </div>
