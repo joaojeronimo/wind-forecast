@@ -13,8 +13,7 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'icon_seamless', name: 'ICON Seamless', agency: 'DWD (Germany)', resolution: '2-13 km', color: '#d97706', enabled: true },
   { id: 'gem_seamless', name: 'GEM Seamless', agency: 'CMC (Canada)', resolution: '15-25 km', color: '#e11d48', enabled: true },
   { id: 'meteofrance_seamless', name: 'Météo-France', agency: 'Météo-France', resolution: '2-25 km', color: '#7c3aed', enabled: true },
-  { id: 'ukmo_seamless', name: 'UKMO Seamless', agency: 'UK Met Office', resolution: '10-25 km', color: '#db2777', enabled: true },
-  { id: 'jma_seamless', name: 'JMA Seamless', agency: 'Japan Met Agency', resolution: '5-20 km', color: '#0d9488', enabled: true }
+  { id: 'ukmo_seamless', name: 'UKMO Seamless', agency: 'UK Met Office', resolution: '10-25 km', color: '#db2777', enabled: true }
 ];
 
 export async function fetchWindForecast(
@@ -26,9 +25,9 @@ export async function fetchWindForecast(
 ): Promise<ForecastResult> {
   const modelsParam = modelsToQuery.join(',');
   const hourlyVariables = [
+    'wind_gusts_10m',
     'wind_speed_10m',
     'wind_direction_10m',
-    'wind_gusts_10m',
     'temperature_2m'
   ].join(',');
 
@@ -89,21 +88,25 @@ export async function fetchWindForecast(
     const modelMap: Partial<Record<ModelId, ModelDataPoint>> = {};
 
     for (const model of modelsToQuery) {
+      const gustKey = `wind_gusts_10m_${model}`;
       const speedKey = `wind_speed_10m_${model}`;
       const dirKey = `wind_direction_10m_${model}`;
-      const gustKey = `wind_gusts_10m_${model}`;
       const tempKey = `temperature_2m_${model}`;
 
+      const rawGust = hourly[gustKey]?.[absoluteIndex];
       const rawSpeed = hourly[speedKey]?.[absoluteIndex];
       const rawDir = hourly[dirKey]?.[absoluteIndex];
-      const rawGust = hourly[gustKey]?.[absoluteIndex];
       const rawTemp = hourly[tempKey]?.[absoluteIndex];
 
-      if (rawSpeed !== undefined && rawSpeed !== null && !isNaN(rawSpeed)) {
+      const gustVal = rawGust !== undefined && rawGust !== null && !isNaN(rawGust)
+        ? Number(rawGust)
+        : (rawSpeed !== undefined && rawSpeed !== null && !isNaN(rawSpeed) ? Number(rawSpeed) : null);
+
+      if (gustVal !== null) {
         modelMap[model] = {
-          speed: Number(rawSpeed),
+          gust: gustVal,
+          speed: rawSpeed !== undefined && rawSpeed !== null ? Number(rawSpeed) : gustVal,
           direction: Number(rawDir ?? 0),
-          gust: rawGust !== undefined && rawGust !== null ? Number(rawGust) : undefined,
           temperature: rawTemp !== undefined && rawTemp !== null ? Number(rawTemp) : undefined
         };
       }
@@ -125,7 +128,7 @@ export async function fetchWindForecast(
 }
 
 /**
- * Generates synthetic realistic multi-model forecast data for offline demo or fallback testing
+ * Generates synthetic realistic multi-model gust forecast data for offline demo or fallback testing
  */
 export function generateDemoForecast(
   latitude: number,
@@ -140,27 +143,27 @@ export function generateDemoForecast(
     const timeDate = new Date(now.getTime() + i * 3600 * 1000);
     const timeStr = timeDate.toISOString().slice(0, 19);
 
-    // Diurnal wind cycle simulation (thermal effect)
+    // Diurnal gust cycle simulation
     const hourOfDay = timeDate.getHours();
     const thermalBoost = Math.sin(((hourOfDay - 8) / 12) * Math.PI);
-    const baseSpeed = 18 + (thermalBoost > 0 ? thermalBoost * 14 : 0);
+    // Gusts are higher than sustained wind
+    const baseGust = 28 + (thermalBoost > 0 ? thermalBoost * 22 : 0);
     const baseDir = 330 + Math.sin(i / 10) * 20; // NNW wind
     const baseTemp = 16 + (thermalBoost > 0 ? thermalBoost * 6 : -2);
 
     const modelMap: Partial<Record<ModelId, ModelDataPoint>> = {};
     models.forEach((m, mIdx) => {
-      // Model variations
-      const modelSpeedBias = (mIdx % 3 - 1) * 2.5 + Math.sin(i + mIdx) * 2;
+      // Model variations in gust prediction
+      const modelGustBias = (mIdx % 3 - 1) * 4.5 + Math.sin(i + mIdx) * 3;
       const modelDirBias = (mIdx % 2 === 0 ? 1 : -1) * (mIdx * 3);
-      const speed = Math.max(2, baseSpeed + modelSpeedBias);
+      const gust = Math.max(6, baseGust + modelGustBias);
       const direction = ((baseDir + modelDirBias) % 360 + 360) % 360;
-      const gust = speed * (1.25 + (mIdx % 3) * 0.1);
       const temperature = baseTemp + (mIdx % 2 === 0 ? 0.5 : -0.5);
 
       modelMap[m] = {
-        speed: Math.round(speed * 10) / 10,
-        direction: Math.round(direction),
         gust: Math.round(gust * 10) / 10,
+        speed: Math.round((gust / 1.35) * 10) / 10,
+        direction: Math.round(direction),
         temperature: Math.round(temperature * 10) / 10
       };
     });
@@ -174,7 +177,7 @@ export function generateDemoForecast(
     timezone: 'Local (Demo Mode)',
     elevation: 25,
     fetchedAt: new Date(),
-    locationName: `${locationName} (Demo Data)`,
+    locationName: `${locationName} (Demo Mode)`,
     hours,
     activeModels: models
   };

@@ -21,7 +21,7 @@ export function renderForecastTable(
   container.innerHTML = `
     <section class="table-section" aria-labelledby="forecast-table-caption">
       <div class="table-header-bar">
-        <h3 id="forecast-table-caption" class="table-caption-title">48-Hour Detailed Hourly Forecast Matrix</h3>
+        <h3 id="forecast-table-caption" class="table-caption-title">48-Hour Detailed Hourly Gust Forecast Matrix</h3>
         <div class="table-actions">
           <button type="button" class="btn btn-outline btn-sm" id="table-scroll-selected-btn">
             Scroll to Selected
@@ -40,10 +40,10 @@ export function renderForecastTable(
           <thead>
             <tr>
               <th scope="col" class="col-sticky-time">Day / Time</th>
-              <th scope="col">Consensus Speed</th>
-              <th scope="col">Model Spread (Min - Max)</th>
-              <th scope="col">Wind Direction</th>
-              <th scope="col">Peak Gusts</th>
+              <th scope="col">Peak Gust (Max)</th>
+              <th scope="col">Consensus Gust (Mean)</th>
+              <th scope="col">Model Gust Spread (Min – Max)</th>
+              <th scope="col">Direction</th>
               <th scope="col">Temperature</th>
               <th scope="col">Beaufort Scale</th>
               <th scope="col">Agreement</th>
@@ -65,7 +65,7 @@ export function renderForecastTable(
                   tabindex="0"
                   role="button"
                   aria-pressed="${isSelected}"
-                  aria-label="${h.dayLabel} at ${h.hourLabel}, wind ${formatSpeed(h.speedMean, speedUnit)} from ${h.cardinal}"
+                  aria-label="${h.dayLabel} at ${h.hourLabel}, peak gust ${formatSpeed(h.gustMax, speedUnit)} from ${h.cardinal}"
                 >
                   <!-- Sticky Row Header -->
                   <th scope="row" class="col-sticky-time">
@@ -74,36 +74,36 @@ export function renderForecastTable(
                     ${h.isCurrentHour ? '<span class="cell-now-badge">Now</span>' : ''}
                   </th>
 
-                  <!-- Consensus Speed -->
+                  <!-- Peak Gust -->
                   <td class="col-speed">
                     <div class="speed-cell-content">
-                      <span class="speed-val-bold">${convertSpeed(h.speedMean, speedUnit).toFixed(1)}</span>
+                      <span class="speed-val-bold gust-val-hero">${convertSpeed(h.gustMax, speedUnit).toFixed(1)}</span>
                       <span class="speed-unit-dim">${speedUnit}</span>
                     </div>
+                  </td>
+
+                  <!-- Consensus Mean Gust -->
+                  <td class="col-speed-mean">
+                    <span class="gust-mean-val">${convertSpeed(h.gustMean, speedUnit).toFixed(1)} ${speedUnit}</span>
                   </td>
 
                   <!-- Spread Min-Max -->
                   <td class="col-spread">
                     <span class="spread-range">
-                      ${convertSpeed(h.speedMin, speedUnit).toFixed(1)} – ${convertSpeed(h.speedMax, speedUnit).toFixed(1)}
+                      ${convertSpeed(h.gustMin, speedUnit).toFixed(1)} – ${convertSpeed(h.gustMax, speedUnit).toFixed(1)}
                     </span>
-                    <span class="spread-dev">±${convertSpeed(h.speedStdDev, speedUnit).toFixed(1)}</span>
+                    <span class="spread-dev">±${convertSpeed(h.gustStdDev, speedUnit).toFixed(1)}</span>
                   </td>
 
                   <!-- Direction -->
                   <td class="col-dir">
-                    <div class="dir-cell-content" title="Wind from ${h.directionMean.toFixed(0)}°">
+                    <div class="dir-cell-content" title="Gusts from ${h.directionMean.toFixed(0)}°">
                       <svg class="table-arrow-icon" style="transform: rotate(${arrowRot}deg);" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
                         <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"></path>
                       </svg>
                       <span class="dir-cardinal-bold">${h.cardinal}</span>
                       <span class="dir-degrees-dim">${h.directionMean.toFixed(0)}°</span>
                     </div>
-                  </td>
-
-                  <!-- Gusts -->
-                  <td class="col-gusts">
-                    <span class="gust-val">${formatSpeed(h.gustMax, speedUnit)}</span>
                   </td>
 
                   <!-- Temp -->

@@ -5,8 +5,7 @@ export type ModelId =
   | 'icon_seamless'
   | 'gem_seamless'
   | 'meteofrance_seamless'
-  | 'ukmo_seamless'
-  | 'jma_seamless';
+  | 'ukmo_seamless';
 
 export interface ModelInfo {
   id: ModelId;
@@ -31,9 +30,9 @@ export interface BeaufortInfo {
 export type ConsensusRating = 'high' | 'moderate' | 'divergent';
 
 export interface ModelDataPoint {
-  speed: number;        // in km/h from API
+  gust: number;         // Gust speed in km/h from Open-Meteo wind_gusts_10m
+  speed?: number;       // Sustained speed in km/h
   direction: number;    // degrees (0-360)
-  gust?: number;        // km/h
   temperature?: number; // Celsius
 }
 
@@ -44,26 +43,27 @@ export interface AggregatedHour {
   dayLabel: string;       // e.g. "Tue, Nov 10"
   isCurrentHour: boolean;
 
-  // Aggregated Wind Speed (stored in km/h, converted dynamically for display)
+  // Aggregated Wind Gusts (stored in km/h, converted dynamically for display)
+  gustMax: number;        // Peak predicted gust across all models
+  gustMean: number;       // Consensus average gust across models
+  gustMedian: number;     // Median gust across models
+  gustMin: number;        // Lowest predicted gust among models
+  gustStdDev: number;     // Standard deviation of gust predictions
+
+  // Sustained speed (kept as reference)
   speedMean: number;
-  speedMedian: number;
-  speedMin: number;
-  speedMax: number;
-  speedStdDev: number;
 
   // Aggregated Wind Direction
   directionMean: number;      // 0 - 360 degrees (vector average)
   directionSpread: number;    // angular std deviation (degrees)
   cardinal: string;           // N, NNE, NE, etc.
 
-  // Gusts & Temp
-  gustMax: number;
-  gustMean: number;
+  // Temperature
   tempMean: number;
   tempMin: number;
   tempMax: number;
 
-  // Analysis
+  // Analysis based on Gusts
   beaufort: BeaufortInfo;
   consensus: ConsensusRating;
   reportingModelsCount: number;

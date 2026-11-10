@@ -10,8 +10,8 @@ import { convertSpeed, convertTemp } from './units';
 
 describe('Wind Direction Vector Math', () => {
   it('correctly calculates vector average across the 360/0 degree boundary', () => {
-    // 350 deg (NNW) and 10 deg (NNE) with equal speeds should average to 0 / 360 deg (North), NOT 180 deg (South)!
-    const res = calculateVectorWindDirection([350, 10], [20, 20]);
+    // 350 deg (NNW) and 10 deg (NNE) with equal gusts should average to 0 / 360 deg (North), NOT 180 deg (South)!
+    const res = calculateVectorWindDirection([350, 10], [35, 35]);
     expect(res.meanDirection === 0 || res.meanDirection === 360).toBe(true);
     expect(res.angularSpread).toBeLessThan(20);
   });
@@ -35,7 +35,6 @@ describe('Wind Direction Vector Math', () => {
 
 describe('Unit Conversions', () => {
   it('converts km/h to knots properly', () => {
-    // 10 km/h is ~ 5.4 knots
     const knots = convertSpeed(10, 'knots');
     expect(knots).toBeCloseTo(5.399, 1);
   });
@@ -46,24 +45,23 @@ describe('Unit Conversions', () => {
   });
 });
 
-describe('aggregateHour', () => {
-  it('aggregates multi-model hour data properly', () => {
+describe('aggregateHour for Gusts', () => {
+  it('aggregates multi-model gust predictions properly', () => {
     const hour = aggregateHour(
       '2026-11-10T14:00:00Z',
       {
-        best_match: { speed: 25, direction: 340, gust: 35, temperature: 18 },
-        ecmwf_ifs025: { speed: 27, direction: 345, gust: 38, temperature: 18 },
-        gfs_seamless: { speed: 24, direction: 335, gust: 33, temperature: 19 }
+        best_match: { gust: 35, speed: 25, direction: 340, temperature: 18 },
+        ecmwf_ifs025: { gust: 38, speed: 27, direction: 345, temperature: 18 },
+        gfs_seamless: { gust: 33, speed: 24, direction: 335, temperature: 19 }
       },
       ['best_match', 'ecmwf_ifs025', 'gfs_seamless']
     );
 
     expect(hour.reportingModelsCount).toBe(3);
-    expect(hour.speedMean).toBeCloseTo(25.3, 1);
-    expect(hour.speedMin).toBe(24);
-    expect(hour.speedMax).toBe(27);
-    expect(hour.cardinal).toBe('NNW');
+    expect(hour.gustMean).toBeCloseTo(35.3, 1);
+    expect(hour.gustMin).toBe(33);
     expect(hour.gustMax).toBe(38);
+    expect(hour.cardinal).toBe('NNW');
     expect(hour.consensus).toBe('high');
   });
 });

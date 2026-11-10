@@ -88,7 +88,7 @@ export class TimeScrubber {
     const maxIdx = this.hours.length - 1;
 
     this.container.innerHTML = `
-      <section class="time-scrubber-section" aria-label="48-Hour Time Navigation and Scrubber">
+      <section class="time-scrubber-section" aria-label="48-Hour Time Navigation and Gust Scrubber">
         <!-- Time status row -->
         <div class="scrubber-header-row">
           <div class="time-status-pill">
@@ -98,14 +98,14 @@ export class TimeScrubber {
           </div>
 
           <div class="scrubber-quick-stats">
-            <span class="quick-speed" id="scrubber-quick-speed">Consensus: ${formatSpeed(current.speedMean, this.speedUnit)}</span>
+            <span class="quick-speed" id="scrubber-quick-speed">Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}</span>
             <span class="quick-dir" id="scrubber-quick-dir">${current.cardinal} (${current.directionMean.toFixed(0)}°)</span>
           </div>
         </div>
 
         <!-- Slider Bar -->
         <div class="slider-wrapper">
-          <label for="time-range-slider" class="visually-hidden">Scrub through 48 hour wind forecast</label>
+          <label for="time-range-slider" class="visually-hidden">Scrub through 48 hour gust predictions</label>
           <input
             type="range"
             id="time-range-slider"
@@ -117,12 +117,11 @@ export class TimeScrubber {
             aria-valuemin="0"
             aria-valuemax="${maxIdx}"
             aria-valuenow="${this.selectedIndex}"
-            aria-valuetext="${current.dayLabel} ${current.hourLabel}, ${formatSpeed(current.speedMean, this.speedUnit)} ${current.cardinal}"
+            aria-valuetext="${current.dayLabel} ${current.hourLabel}, Peak Gust ${formatSpeed(current.gustMax, this.speedUnit)} from ${current.cardinal}"
           />
           <!-- Time tick marks -->
           <div class="slider-ticks" aria-hidden="true">
             ${this.hours.map((h, i) => {
-              // Mark every 6 hours
               if (i % 6 === 0 || i === maxIdx) {
                 return `
                   <div class="tick-mark" style="left: ${(i / maxIdx) * 100}%">
@@ -156,7 +155,7 @@ export class TimeScrubber {
             </button>
           </div>
 
-          <button type="button" class="btn btn-secondary play-btn" id="play-scrub-btn" title="Automatically play through forecast (Spacebar)">
+          <button type="button" class="btn btn-secondary play-btn" id="play-scrub-btn" title="Automatically play through gust forecast (Spacebar)">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
@@ -229,7 +228,7 @@ export class TimeScrubber {
       slider.setAttribute('aria-valuenow', this.selectedIndex.toString());
       slider.setAttribute(
         'aria-valuetext',
-        `${current.dayLabel} ${current.hourLabel}, ${formatSpeed(current.speedMean, this.speedUnit)} ${current.cardinal}`
+        `${current.dayLabel} ${current.hourLabel}, Peak Gust ${formatSpeed(current.gustMax, this.speedUnit)} from ${current.cardinal}`
       );
     }
 
@@ -240,7 +239,7 @@ export class TimeScrubber {
     if (relBadge) relBadge.textContent = this.getRelativeLabel(current);
 
     const speedSpan = this.container.querySelector('#scrubber-quick-speed');
-    if (speedSpan) speedSpan.textContent = `Consensus: ${formatSpeed(current.speedMean, this.speedUnit)}`;
+    if (speedSpan) speedSpan.textContent = `Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}`;
 
     const dirSpan = this.container.querySelector('#scrubber-quick-dir');
     if (dirSpan) dirSpan.textContent = `${current.cardinal} (${current.directionMean.toFixed(0)}°)`;

@@ -755,9 +755,33 @@ body.theme-light .unit-btn.active {
   color: var(--accent-cyan);
 }
 
+.speed-label-stack {
+  display: flex;
+  flex-direction: column;
+}
+
 .speed-unit-label {
   font-size: 1.25rem;
   font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1.1;
+}
+
+.gust-hero-tag {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent-amber);
+}
+
+.gust-val-hero {
+  color: var(--accent-amber);
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.gust-mean-val {
+  font-weight: 600;
   color: var(--text-secondary);
 }
 

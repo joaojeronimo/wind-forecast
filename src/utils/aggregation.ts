@@ -100,13 +100,13 @@ export function calculateStdDev(values: number[], mean: number): number {
 }
 
 /**
- * Determines consensus level across models based on wind speed standard deviation and spread.
+ * Determines consensus level across models based on gust speed standard deviation and spread.
  */
-export function evaluateConsensus(speedStdDev: number, directionSpread: number): ConsensusRating {
-  // speedStdDev in km/h (< 3 km/h is ~1.6 kts -> high agreement)
-  if (speedStdDev <= 3.5 && directionSpread <= 25) {
+export function evaluateConsensus(gustStdDev: number, directionSpread: number): ConsensusRating {
+  // gustStdDev in km/h (< 4.5 km/h is ~2.4 kts -> high agreement)
+  if (gustStdDev <= 4.5 && directionSpread <= 25) {
     return 'high';
-  } else if (speedStdDev <= 7.0 && directionSpread <= 50) {
+  } else if (gustStdDev <= 9.0 && directionSpread <= 50) {
     return 'moderate';
   } else {
     return 'divergent';
@@ -114,7 +114,7 @@ export function evaluateConsensus(speedStdDev: number, directionSpread: number):
 }
 
 /**
- * Aggregates model predictions for a single hour.
+ * Aggregates model predictions for a single hour, focusing squarely on Wind Gusts.
  */
 export function aggregateHour(
   timeStr: string,
@@ -126,18 +126,18 @@ export function aggregateHour(
   const dayLabel = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 
   // Gather values from models that are active and have valid numeric values
-  const speeds: number[] = [];
-  const directions: number[] = [];
   const gusts: number[] = [];
+  const sustained: number[] = [];
+  const directions: number[] = [];
   const temps: number[] = [];
 
   for (const id of activeModelIds) {
     const point = modelMap[id];
-    if (point && !isNaN(point.speed) && point.speed !== null) {
-      speeds.push(point.speed);
+    if (point && !isNaN(point.gust) && point.gust !== null) {
+      gusts.push(point.gust);
       directions.push(point.direction);
-      if (point.gust !== undefined && !isNaN(point.gust) && point.gust !== null) {
-        gusts.push(point.gust);
+      if (point.speed !== undefined && !isNaN(point.speed) && point.speed !== null) {
+        sustained.push(point.speed);
       }
       if (point.temperature !== undefined && !isNaN(point.temperature) && point.temperature !== null) {
         temps.push(point.temperature);
@@ -145,28 +145,27 @@ export function aggregateHour(
     }
   }
 
-  // Calculate speed aggregates
-  const speedMean = speeds.length > 0 ? calculateMean(speeds) : 0;
-  const speedMedian = speeds.length > 0 ? calculateMedian(speeds) : 0;
-  const speedMin = speeds.length > 0 ? Math.min(...speeds) : 0;
-  const speedMax = speeds.length > 0 ? Math.max(...speeds) : 0;
-  const speedStdDev = speeds.length > 1 ? calculateStdDev(speeds, speedMean) : 0;
+  // Calculate gust aggregates
+  const gustMean = gusts.length > 0 ? calculateMean(gusts) : 0;
+  const gustMedian = gusts.length > 0 ? calculateMedian(gusts) : 0;
+  const gustMin = gusts.length > 0 ? Math.min(...gusts) : 0;
+  const gustMax = gusts.length > 0 ? Math.max(...gusts) : 0;
+  const gustStdDev = gusts.length > 1 ? calculateStdDev(gusts, gustMean) : 0;
 
-  // Calculate direction aggregates
-  const { meanDirection, angularSpread } = calculateVectorWindDirection(directions, speeds);
+  // Sustained speed
+  const speedMean = sustained.length > 0 ? calculateMean(sustained) : gustMean;
+
+  // Calculate direction aggregates (weighted by gust speed)
+  const { meanDirection, angularSpread } = calculateVectorWindDirection(directions, gusts);
   const cardinal = degreesToCardinal(meanDirection);
-
-  // Gusts
-  const gustMax = gusts.length > 0 ? Math.max(...gusts) : speedMax;
-  const gustMean = gusts.length > 0 ? calculateMean(gusts) : speedMean;
 
   // Temperature
   const tempMean = temps.length > 0 ? calculateMean(temps) : 20;
   const tempMin = temps.length > 0 ? Math.min(...temps) : tempMean;
   const tempMax = temps.length > 0 ? Math.max(...temps) : tempMean;
 
-  const beaufort = getBeaufort(speedMean);
-  const consensus = evaluateConsensus(speedStdDev, angularSpread);
+  const beaufort = getBeaufort(gustMean);
+  const consensus = evaluateConsensus(gustStdDev, angularSpread);
 
   // Check if this matches current real-world hour (within 30 mins)
   const now = new Date();
@@ -178,22 +177,21 @@ export function aggregateHour(
     hourLabel,
     dayLabel,
     isCurrentHour,
+    gustMean: Math.round(gustMean * 10) / 10,
+    gustMedian: Math.round(gustMedian * 10) / 10,
+    gustMin: Math.round(gustMin * 10) / 10,
+    gustMax: Math.round(gustMax * 10) / 10,
+    gustStdDev: Math.round(gustStdDev * 10) / 10,
     speedMean: Math.round(speedMean * 10) / 10,
-    speedMedian: Math.round(speedMedian * 10) / 10,
-    speedMin: Math.round(speedMin * 10) / 10,
-    speedMax: Math.round(speedMax * 10) / 10,
-    speedStdDev: Math.round(speedStdDev * 10) / 10,
     directionMean: meanDirection,
     directionSpread: angularSpread,
     cardinal,
-    gustMax: Math.round(gustMax * 10) / 10,
-    gustMean: Math.round(gustMean * 10) / 10,
     tempMean: Math.round(tempMean * 10) / 10,
     tempMin: Math.round(tempMin * 10) / 10,
     tempMax: Math.round(tempMax * 10) / 10,
     beaufort,
     consensus,
-    reportingModelsCount: speeds.length,
+    reportingModelsCount: gusts.length,
     modelValues: modelMap
   };
 }

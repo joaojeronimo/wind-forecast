@@ -23,11 +23,11 @@ export class WindChart {
     this.container = container;
     this.callbacks = callbacks;
     this.container.innerHTML = `
-      <section class="chart-section" aria-label="48-Hour Multi-Model Wind Forecast Chart">
+      <section class="chart-section" aria-label="48-Hour Multi-Model Wind Gusts Chart">
         <div class="chart-header">
           <div class="chart-title-group">
-            <h3 class="chart-title">48-Hour Wind Speed & Direction Forecast</h3>
-            <span class="chart-subtitle">Ensemble spread corridor (min-max) & model curves</span>
+            <h3 class="chart-title">48-Hour Wind Gusts Forecast & Multi-Model Comparison</h3>
+            <span class="chart-subtitle">Ensemble gust corridor (min to peak max) & model curves</span>
           </div>
           <div class="chart-legend" id="chart-legend" aria-hidden="true"></div>
         </div>
@@ -102,7 +102,6 @@ export class WindChart {
       }
     });
 
-    // Touch support for mobile scrolling / scrubbing
     this.canvas.addEventListener('touchmove', (e) => {
       if (e.touches.length > 0) {
         const touch = e.touches[0];
@@ -126,11 +125,11 @@ export class WindChart {
     legend.innerHTML = `
       <div class="legend-item">
         <span class="legend-swatch band-swatch"></span>
-        <span>Min-Max Spread</span>
+        <span>Gust Spread (Min-Max)</span>
       </div>
       <div class="legend-item">
         <span class="legend-swatch mean-swatch"></span>
-        <span>Consensus Mean</span>
+        <span>Consensus Mean Gust</span>
       </div>
       ${this.activeModelIds.slice(0, 5).map(id => {
         const m = modelLookup.get(id);
@@ -167,33 +166,30 @@ export class WindChart {
     const padLeft = 45;
     const padRight = 20;
     const padTop = 20;
-    const padBottom = 55; // space for direction arrows & time labels
+    const padBottom = 55;
 
     const chartW = width - padLeft - padRight;
     const chartH = height - padTop - padBottom;
 
-    // Determine max speed for Y-axis scaling
-    let maxSpeed = 10;
+    // Determine max speed for Y-axis scaling based on Peak Gusts
+    let maxGust = 10;
     for (const h of this.hours) {
-      const convertedMax = convertSpeed(h.speedMax, this.speedUnit);
-      const convertedGust = convertSpeed(h.gustMax, this.speedUnit);
-      if (convertedMax > maxSpeed) maxSpeed = convertedMax;
-      if (convertedGust > maxSpeed) maxSpeed = convertedGust;
+      const convertedPeak = convertSpeed(h.gustMax, this.speedUnit);
+      if (convertedPeak > maxGust) maxGust = convertedPeak;
     }
-    // Round maxSpeed up to next multiple of 5 or 10
-    maxSpeed = Math.ceil((maxSpeed + 2) / 5) * 5;
+    maxGust = Math.ceil((maxGust + 4) / 5) * 5;
 
     const getX = (i: number) => padLeft + (i / (this.hours.length - 1)) * chartW;
-    const getY = (val: number) => padTop + chartH - (val / maxSpeed) * chartH;
+    const getY = (val: number) => padTop + chartH - (val / maxGust) * chartH;
 
-    // 1. Draw Grid lines and Y-axis labels
+    // 1. Grid lines and Y-axis labels
     const yTicks = 5;
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
     for (let t = 0; t <= yTicks; t++) {
-      const tickVal = (maxSpeed / yTicks) * t;
+      const tickVal = (maxGust / yTicks) * t;
       const y = getY(tickVal);
 
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
@@ -207,24 +203,24 @@ export class WindChart {
       ctx.fillText(`${tickVal.toFixed(0)} ${getSpeedUnitLabel(this.speedUnit)}`, padLeft - 6, y);
     }
 
-    // 2. Draw Spread Corridor (Min to Max confidence band)
+    // 2. Spread Corridor for Gusts (Min to Max confidence band)
     ctx.beginPath();
     for (let i = 0; i < this.hours.length; i++) {
       const x = getX(i);
-      const yMax = getY(convertSpeed(this.hours[i].speedMax, this.speedUnit));
+      const yMax = getY(convertSpeed(this.hours[i].gustMax, this.speedUnit));
       if (i === 0) ctx.moveTo(x, yMax);
       else ctx.lineTo(x, yMax);
     }
     for (let i = this.hours.length - 1; i >= 0; i--) {
       const x = getX(i);
-      const yMin = getY(convertSpeed(this.hours[i].speedMin, this.speedUnit));
+      const yMin = getY(convertSpeed(this.hours[i].gustMin, this.speedUnit));
       ctx.lineTo(x, yMin);
     }
     ctx.closePath();
-    ctx.fillStyle = isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.12)';
+    ctx.fillStyle = isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(217, 119, 6, 0.12)';
     ctx.fill();
 
-    // 3. Draw Individual Model Curves
+    // 3. Individual Model Gust Curves
     const modelLookup = new Map(AVAILABLE_MODELS.map(m => [m.id, m]));
     for (const modelId of this.activeModelIds) {
       const model = modelLookup.get(modelId);
@@ -234,9 +230,9 @@ export class WindChart {
       let hasStarted = false;
       for (let i = 0; i < this.hours.length; i++) {
         const pt = this.hours[i].modelValues[modelId];
-        if (pt && !isNaN(pt.speed)) {
+        if (pt && !isNaN(pt.gust)) {
           const x = getX(i);
-          const y = getY(convertSpeed(pt.speed, this.speedUnit));
+          const y = getY(convertSpeed(pt.gust, this.speedUnit));
           if (!hasStarted) {
             ctx.moveTo(x, y);
             hasStarted = true;
@@ -245,24 +241,24 @@ export class WindChart {
           }
         }
       }
-      ctx.strokeStyle = `${model.color}77`; // semi-transparent
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = `${model.color}88`;
+      ctx.lineWidth = 1.3;
       ctx.stroke();
     }
 
-    // 4. Draw Consensus Mean Line
+    // 4. Consensus Mean Gust Line
     ctx.beginPath();
     for (let i = 0; i < this.hours.length; i++) {
       const x = getX(i);
-      const y = getY(convertSpeed(this.hours[i].speedMean, this.speedUnit));
+      const y = getY(convertSpeed(this.hours[i].gustMean, this.speedUnit));
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
+    ctx.strokeStyle = isDark ? '#f59e0b' : '#d97706';
     ctx.lineWidth = 2.8;
     ctx.stroke();
 
-    // 5. Draw Time Markers & Wind Arrows on X-Axis
+    // 5. Time Markers & Wind Arrows on X-Axis
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
@@ -270,7 +266,6 @@ export class WindChart {
       const h = this.hours[i];
       const x = getX(i);
 
-      // Draw date change vertical line if midnight (00:00)
       if (h.date.getHours() === 0 && i > 0) {
         ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)';
         ctx.setLineDash([3, 3]);
@@ -285,9 +280,7 @@ export class WindChart {
         ctx.fillText(h.dayLabel, x + 25, padTop + 4);
       }
 
-      // Draw arrow and time text every 3 hours
       if (i % 3 === 0 || i === this.hours.length - 1) {
-        // Arrow
         const arrowY = padTop + chartH + 16;
         const arrowRot = ((h.directionMean + 180) % 360) * (Math.PI / 180);
 
@@ -304,22 +297,20 @@ export class WindChart {
         ctx.fill();
         ctx.restore();
 
-        // Time label
         ctx.font = '10px sans-serif';
         ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
         ctx.fillText(h.hourLabel, x, padTop + chartH + 30);
       }
     }
 
-    // 6. Draw Selected Hour Cursor Line
+    // 6. Selected Hour Cursor Line
     const activeIdx = this.isHovering ? this.hoverIndex : this.selectedIndex;
     if (activeIdx >= 0 && activeIdx < this.hours.length) {
       const activeHour = this.hours[activeIdx];
       const cursorX = getX(activeIdx);
-      const cursorY = getY(convertSpeed(activeHour.speedMean, this.speedUnit));
+      const cursorY = getY(convertSpeed(activeHour.gustMax, this.speedUnit));
 
-      // Vertical line
-      ctx.strokeStyle = isDark ? '#f59e0b' : '#d97706';
+      ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 2]);
       ctx.beginPath();
@@ -328,8 +319,7 @@ export class WindChart {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Point circle
-      ctx.fillStyle = isDark ? '#f59e0b' : '#d97706';
+      ctx.fillStyle = isDark ? '#38bdf8' : '#0284c7';
       ctx.beginPath();
       ctx.arc(cursorX, cursorY, 5, 0, Math.PI * 2);
       ctx.fill();
@@ -337,9 +327,8 @@ export class WindChart {
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Tooltip flag
-      const speedStr = `${convertSpeed(activeHour.speedMean, this.speedUnit).toFixed(1)} ${getSpeedUnitLabel(this.speedUnit)}`;
-      const tooltipText = `${activeHour.hourLabel} • ${speedStr} ${activeHour.cardinal}`;
+      const peakStr = `${convertSpeed(activeHour.gustMax, this.speedUnit).toFixed(1)} ${getSpeedUnitLabel(this.speedUnit)}`;
+      const tooltipText = `${activeHour.hourLabel} • Peak Gust: ${peakStr} ${activeHour.cardinal}`;
       ctx.font = 'bold 11px sans-serif';
       const textMetrics = ctx.measureText(tooltipText);
       const boxW = textMetrics.width + 16;
@@ -350,7 +339,7 @@ export class WindChart {
       const boxY = Math.max(padTop + 2, cursorY - 32);
 
       ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
-      ctx.strokeStyle = isDark ? '#f59e0b' : '#d97706';
+      ctx.strokeStyle = isDark ? '#38bdf8' : '#0284c7';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect ? ctx.roundRect(boxX, boxY, boxW, boxH, 4) : ctx.rect(boxX, boxY, boxW, boxH);

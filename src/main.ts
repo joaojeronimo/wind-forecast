@@ -132,7 +132,7 @@ class WindForecastApp {
     this.isLoading = true;
     this.renderAlert(null);
     this.renderAll();
-    this.announce(`Fetching 48-hour multi-model forecast for ${this.currentLocation.name}...`);
+    this.announce(`Fetching 48-hour multi-model gust forecast for ${this.currentLocation.name}...`);
 
     try {
       this.forecastResult = await fetchWindForecast(
@@ -142,7 +142,7 @@ class WindForecastApp {
         this.settings.activeModels
       );
       this.lastUpdated = new Date();
-      this.announce(`Forecast updated for ${this.currentLocation.name}`);
+      this.announce(`Gust forecast updated for ${this.currentLocation.name}`);
     } catch (err: unknown) {
       const msg = (err as Error).message;
       console.warn('Live API fetch failed, falling back to demo mode:', msg);

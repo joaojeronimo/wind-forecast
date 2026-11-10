@@ -11,11 +11,10 @@ export function renderCurrentFocusCard(
 ): void {
   const modelLookup = new Map(AVAILABLE_MODELS.map(m => [m.id, m]));
 
-  const speedFormatted = formatSpeed(hour.speedMean, speedUnit);
-  const gustFormatted = formatSpeed(hour.gustMax, speedUnit);
+  const peakGustFormatted = formatSpeed(hour.gustMax, speedUnit);
+  const meanGustFormatted = formatSpeed(hour.gustMean, speedUnit);
+  const minGustFormatted = formatSpeed(hour.gustMin, speedUnit);
   const tempFormatted = formatTemp(hour.tempMean, tempUnit);
-  const minSpeedFormatted = formatSpeed(hour.speedMin, speedUnit);
-  const maxSpeedFormatted = formatSpeed(hour.speedMax, speedUnit);
 
   const consensusClass =
     hour.consensus === 'high' ? 'badge-consensus-high' :
@@ -23,10 +22,8 @@ export function renderCurrentFocusCard(
 
   const consensusText =
     hour.consensus === 'high' ? 'High Agreement' :
-    hour.consensus === 'moderate' ? 'Moderate Spread' : 'Divergent Forecast';
+    hour.consensus === 'moderate' ? 'Moderate Spread' : 'Divergent Gusts';
 
-  // In meteorology, wind direction is where the wind is coming FROM.
-  // The arrow represents airflow, so it points in the direction wind is blowing TOWARDS (direction + 180).
   const arrowRotation = (hour.directionMean + 180) % 360;
 
   container.innerHTML = `
@@ -34,22 +31,22 @@ export function renderCurrentFocusCard(
       <div class="focus-card-top-row">
         <div class="focus-time-header">
           <h2 id="focus-card-title" class="focus-date">${hour.dayLabel} • ${hour.hourLabel}</h2>
-          <span class="focus-sublabel">${hour.reportingModelsCount} models reporting</span>
+          <span class="focus-sublabel">${hour.reportingModelsCount} models reporting gust forecasts</span>
         </div>
 
         <div class="focus-badges">
-          <span class="badge ${consensusClass}" title="Model standard deviation: ±${convertSpeed(hour.speedStdDev, speedUnit).toFixed(1)} ${speedUnit}">
-            ${consensusText} (±${convertSpeed(hour.speedStdDev, speedUnit).toFixed(1)})
+          <span class="badge ${consensusClass}" title="Gust standard deviation: ±${convertSpeed(hour.gustStdDev, speedUnit).toFixed(1)} ${speedUnit}">
+            ${consensusText} (±${convertSpeed(hour.gustStdDev, speedUnit).toFixed(1)})
           </span>
           <span class="badge badge-beaufort" style="background-color: ${hour.beaufort.color}22; color: ${hour.beaufort.color}; border: 1px solid ${hour.beaufort.color}44">
-            Bft ${hour.beaufort.number}: ${hour.beaufort.label}
+            Bft ${hour.beaufort.number}: ${hour.beaufort.label} Gusts
           </span>
         </div>
       </div>
 
       <div class="focus-main-grid">
         <!-- Wind Compass / Direction Box -->
-        <div class="focus-compass-box" title="Wind blowing FROM ${hour.directionMean.toFixed(0)}° (${hour.cardinal})">
+        <div class="focus-compass-box" title="Gusts blowing FROM ${hour.directionMean.toFixed(0)}° (${hour.cardinal})">
           <div class="compass-dial" aria-hidden="true">
             <span class="compass-marker marker-n">N</span>
             <span class="compass-marker marker-e">E</span>
@@ -68,23 +65,26 @@ export function renderCurrentFocusCard(
           </div>
         </div>
 
-        <!-- Speed and Gusts Box -->
+        <!-- Gust Speed Box -->
         <div class="focus-speed-box">
           <div class="speed-main-display">
-            <span class="speed-number">${convertSpeed(hour.speedMean, speedUnit).toFixed(1)}</span>
-            <span class="speed-unit-label">${speedUnit === 'knots' ? 'knots' : speedUnit}</span>
+            <span class="speed-number">${convertSpeed(hour.gustMax, speedUnit).toFixed(1)}</span>
+            <div class="speed-label-stack">
+              <span class="speed-unit-label">${speedUnit === 'knots' ? 'knots' : speedUnit}</span>
+              <span class="gust-hero-tag">PEAK GUST</span>
+            </div>
           </div>
           <div class="speed-details-row">
-            <div class="stat-pill">
-              <span class="stat-pill-label">Range:</span>
-              <span class="stat-pill-val">${minSpeedFormatted} - ${maxSpeedFormatted}</span>
-            </div>
             <div class="stat-pill gust-pill">
-              <span class="stat-pill-label">Peak Gusts:</span>
-              <span class="stat-pill-val">${gustFormatted}</span>
+              <span class="stat-pill-label">Consensus Mean:</span>
+              <span class="stat-pill-val">${meanGustFormatted}</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-label">Model Range:</span>
+              <span class="stat-pill-val">${minGustFormatted} – ${peakGustFormatted}</span>
             </div>
             <div class="stat-pill temp-pill">
-              <span class="stat-pill-label">Temperature:</span>
+              <span class="stat-pill-label">Temp:</span>
               <span class="stat-pill-val">${tempFormatted}</span>
             </div>
           </div>
@@ -92,9 +92,9 @@ export function renderCurrentFocusCard(
         </div>
       </div>
 
-      <!-- Individual Model Comparison Table for this Hour -->
+      <!-- Individual Model Gust Comparison for this Hour -->
       <div class="model-breakdown-section">
-        <h3 class="model-breakdown-title">Model Predictions for this Hour</h3>
+        <h3 class="model-breakdown-title">Model Gust Predictions for this Hour</h3>
         <div class="model-chips-grid">
           ${activeModelIds.map(id => {
             const model = modelLookup.get(id);
@@ -109,7 +109,7 @@ export function renderCurrentFocusCard(
                 </div>
                 <div class="model-chip-body">
                   <div class="model-chip-speed">
-                    ${formatSpeed(val.speed, speedUnit)}
+                    ${formatSpeed(val.gust, speedUnit)}
                   </div>
                   <div class="model-chip-dir" title="${val.direction}°">
                     <svg class="chip-arrow" style="transform: rotate(${mArrowRot}deg);" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -118,7 +118,7 @@ export function renderCurrentFocusCard(
                     <span>${val.direction}°</span>
                   </div>
                 </div>
-                ${val.gust ? `<div class="model-chip-gust">Gusts: ${formatSpeed(val.gust, speedUnit)}</div>` : ''}
+                <div class="model-chip-gust">Gust Forecast</div>
               </div>
             `;
           }).join('')}

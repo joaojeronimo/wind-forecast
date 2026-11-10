@@ -27,16 +27,16 @@ export function renderHeader(
             <path d="M12.6 19.4A2 2 0 1 0 14 16H2"></path>
           </svg>
           <div class="brand-text">
-            <h1 class="brand-title">WindForecast</h1>
-            <span class="brand-subtitle">48h Multi-Model Ensemble • Open-Meteo</span>
+            <h1 class="brand-title">GustForecast</h1>
+            <span class="brand-subtitle">48h Multi-Model Wind Gusts Ensemble • Open-Meteo</span>
           </div>
         </div>
       </div>
 
       <div class="header-controls">
-        <!-- Speed Unit Toggle -->
-        <fieldset class="unit-group" aria-label="Wind speed unit">
-          <legend class="visually-hidden">Wind speed unit</legend>
+        <!-- Gust Speed Unit Toggle -->
+        <fieldset class="unit-group" aria-label="Gust speed unit">
+          <legend class="visually-hidden">Gust speed unit</legend>
           <button type="button" class="unit-btn ${settings.speedUnit === 'knots' ? 'active' : ''}" data-speed="knots">kts</button>
           <button type="button" class="unit-btn ${settings.speedUnit === 'kmh' ? 'active' : ''}" data-speed="kmh">km/h</button>
           <button type="button" class="unit-btn ${settings.speedUnit === 'ms' ? 'active' : ''}" data-speed="ms">m/s</button>
@@ -51,7 +51,7 @@ export function renderHeader(
         </fieldset>
 
         <!-- Refresh Button -->
-        <button type="button" class="icon-btn refresh-btn" id="refresh-data-btn" title="Refresh forecast data" aria-label="Refresh forecast data (updated ${timeStr})">
+        <button type="button" class="icon-btn refresh-btn" id="refresh-data-btn" title="Refresh gust forecast" aria-label="Refresh gust forecast (updated ${timeStr})">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
@@ -76,7 +76,6 @@ export function renderHeader(
     </header>
   `;
 
-  // Attach listeners
   container.querySelectorAll<HTMLButtonElement>('[data-speed]').forEach(btn => {
     btn.addEventListener('click', () => {
       const unit = btn.getAttribute('data-speed') as SpeedUnit;
