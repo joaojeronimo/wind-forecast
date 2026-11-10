@@ -18,8 +18,9 @@ import { renderModelSelector } from './components/modelSelector';
 import { renderForecastTable } from './components/forecastTable';
 import { renderStickyRefreshButton } from './components/stickyRefreshButton';
 import { aggregateHour } from './utils/aggregation';
+import { findRestoredSelectionIndex } from './utils/selection';
 
-class WindForecastApp {
+export class WindForecastApp {
   private settings: AppSettings;
   private currentLocation: LocationInfo;
   private forecastResult: ForecastResult | null = null;
@@ -152,7 +153,11 @@ class WindForecastApp {
     });
   }
 
-  private async loadForecast(options?: { forceRefresh?: boolean }): Promise<void> {
+  private async loadForecast(options?: { forceRefresh?: boolean; resetSelection?: boolean }): Promise<void> {
+    const prevSelectedHour = options?.resetSelection ? undefined : this.forecastResult?.hours[this.selectedIndex];
+    const prevSelectedTime = prevSelectedHour?.time;
+    const prevSelectedTimestamp = prevSelectedHour?.date.getTime();
+
     this.isLoading = true;
     this.renderAlert(null);
     this.renderAll();
@@ -185,10 +190,12 @@ class WindForecastApp {
       this.lastUpdated = new Date();
     } finally {
       this.isLoading = false;
-      // Default selected hour to current hour or first hour
       if (this.forecastResult) {
-        const curIdx = this.forecastResult.hours.findIndex(h => h.isCurrentHour);
-        this.selectedIndex = curIdx >= 0 ? curIdx : 0;
+        this.selectedIndex = findRestoredSelectionIndex(
+          this.forecastResult.hours,
+          prevSelectedTime,
+          prevSelectedTimestamp
+        );
       }
       this.renderAll();
     }

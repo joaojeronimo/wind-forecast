@@ -18,6 +18,10 @@ export function renderForecastTable(
     return;
   }
 
+  const prevWrapper = container.querySelector<HTMLElement>('#forecast-table-wrapper');
+  const prevScrollTop = prevWrapper ? prevWrapper.scrollTop : null;
+  const prevScrollLeft = prevWrapper ? prevWrapper.scrollLeft : null;
+
   container.innerHTML = `
     <section class="table-section" aria-labelledby="forecast-table-caption">
       <div class="table-header-bar">
@@ -160,4 +164,12 @@ export function renderForecastTable(
     const selectedRow = container.querySelector<HTMLTableRowElement>(`.table-data-row[data-hour-idx="${selectedIndex}"]`);
     selectedRow?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
+
+  const newWrapper = container.querySelector<HTMLElement>('#forecast-table-wrapper');
+  if (newWrapper && prevScrollTop !== null) {
+    newWrapper.scrollTop = prevScrollTop;
+    if (prevScrollLeft !== null) {
+      newWrapper.scrollLeft = prevScrollLeft;
+    }
+  }
 }
