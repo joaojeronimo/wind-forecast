@@ -85,13 +85,19 @@ describe('aggregateHour for Gusts', () => {
 });
 
 describe('Gust Intensity Scrubber Timeline Colors', () => {
-  it('maps key gust thresholds to green -> yellow -> orange -> red -> purple (140 km/h)', () => {
+  it('keeps anything <= 30 km/h green and maps 30-140 km/h across distinct stops', () => {
     expect(PURPLE_GUST_THRESHOLD_KMH).toBe(140);
-    expect(getGustIntensityColor(0)).toBe('#22c55e');   // Green
-    expect(getGustIntensityColor(35)).toBe('#facc15');  // Yellow
-    expect(getGustIntensityColor(70)).toBe('#f97316');  // Orange
-    expect(getGustIntensityColor(105)).toBe('#ef4444'); // Red
-    expect(getGustIntensityColor(140)).toBe('#9333ea'); // Purple
+    expect(getGustIntensityColor(0)).toBe('#22c55e');    // Green
+    expect(getGustIntensityColor(15)).toBe('#22c55e');   // Green
+    expect(getGustIntensityColor(30)).toBe('#22c55e');   // Green threshold
+    expect(getGustIntensityColor(42)).toBe('#a3e635');   // Lime
+    expect(getGustIntensityColor(55)).toBe('#facc15');   // Yellow
+    expect(getGustIntensityColor(68)).toBe('#f59e0b');   // Amber
+    expect(getGustIntensityColor(82)).toBe('#f97316');   // Orange
+    expect(getGustIntensityColor(96)).toBe('#ef4444');   // Red
+    expect(getGustIntensityColor(110)).toBe('#dc2626');  // Crimson
+    expect(getGustIntensityColor(125)).toBe('#d946ef');  // Magenta
+    expect(getGustIntensityColor(140)).toBe('#9333ea');  // Purple
   });
 
   it('flags gusts above 140 km/h for flashing purple', () => {
@@ -102,7 +108,7 @@ describe('Gust Intensity Scrubber Timeline Colors', () => {
   });
 
   it('builds a timeline gradient using flashing purple variable above 140 km/h', () => {
-    const gradient = buildGustTimelineGradient([0, 70, 140, 160]);
+    const gradient = buildGustTimelineGradient([20, 82, 140, 160]);
     expect(gradient).toContain('#22c55e 0.00%');
     expect(gradient).toContain('#f97316 33.33%');
     expect(gradient).toContain('#9333ea 66.67%');

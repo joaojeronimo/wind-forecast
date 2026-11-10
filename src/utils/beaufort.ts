@@ -122,10 +122,14 @@ interface ColorStop {
 }
 
 const GUST_COLOR_STOPS: ColorStop[] = [
-  { kmh: 0, r: 34, g: 197, b: 94, hex: '#22c55e' },     // Green (very low wind)
-  { kmh: 35, r: 250, g: 204, b: 21, hex: '#facc15' },   // Yellow
-  { kmh: 70, r: 249, g: 115, b: 22, hex: '#f97316' },   // Orange
-  { kmh: 105, r: 239, g: 68, b: 68, hex: '#ef4444' },   // Red
+  { kmh: 30, r: 34, g: 197, b: 94, hex: '#22c55e' },    // <= 30 km/h: Green
+  { kmh: 42, r: 163, g: 230, b: 53, hex: '#a3e635' },   // Bright Lime
+  { kmh: 55, r: 250, g: 204, b: 21, hex: '#facc15' },   // Vivid Yellow
+  { kmh: 68, r: 245, g: 158, b: 11, hex: '#f59e0b' },   // Rich Amber
+  { kmh: 82, r: 249, g: 115, b: 22, hex: '#f97316' },   // Bright Orange
+  { kmh: 96, r: 239, g: 68, b: 68, hex: '#ef4444' },    // Scarlet Red
+  { kmh: 110, r: 220, g: 38, b: 38, hex: '#dc2626' },   // Deep Crimson
+  { kmh: 125, r: 217, g: 70, b: 239, hex: '#d946ef' },  // Vivid Magenta
   { kmh: 140, r: 147, g: 51, b: 234, hex: '#9333ea' }   // Purple (140 km/h)
 ];
 
@@ -144,7 +148,8 @@ export function isExtremeGust(kmh: number): boolean {
 
 /**
  * Returns a hex color representing gust intensity in km/h:
- * Green (0) -> Yellow (35) -> Orange (70) -> Red (105) -> Purple (140+).
+ * Green (<= 30) -> Lime (42) -> Yellow (55) -> Amber (68) -> Orange (82) ->
+ * Red (96) -> Crimson (110) -> Magenta (125) -> Purple (140+).
  */
 export function getGustIntensityColor(kmh: number): string {
   if (isNaN(kmh) || kmh <= GUST_COLOR_STOPS[0].kmh) {
