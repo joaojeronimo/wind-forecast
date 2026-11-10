@@ -1,5 +1,10 @@
 import { AggregatedHour, SpeedUnit } from '../types';
 import { formatSpeed } from '../utils/units';
+import {
+  buildGustTimelineGradient,
+  getGustIntensityColor,
+  isExtremeGust
+} from '../utils/beaufort';
 
 export interface TimeScrubberCallbacks {
   onHourSelect: (index: number) => void;
@@ -78,6 +83,27 @@ export class TimeScrubber {
     }
   }
 
+  private renderExtremeSegments(): string {
+    const maxIdx = this.hours.length - 1;
+    if (maxIdx <= 0) {
+      if (this.hours.length === 1 && isExtremeGust(this.hours[0].gustMax)) {
+        return `<span class="slider-extreme-segment" style="left: 0%; width: 100%;"></span>`;
+      }
+      return '';
+    }
+
+    return this.hours
+      .map((h, i) => {
+        if (!isExtremeGust(h.gustMax)) return '';
+        const startRatio = Math.max(0, (i - 0.5) / maxIdx);
+        const endRatio = Math.min(1, (i + 0.5) / maxIdx);
+        const leftPct = (startRatio * 100).toFixed(2);
+        const widthPct = ((endRatio - startRatio) * 100).toFixed(2);
+        return `<span class="slider-extreme-segment" style="left: ${leftPct}%; width: ${widthPct}%;"></span>`;
+      })
+      .join('');
+  }
+
   private render(): void {
     if (this.hours.length === 0) {
       this.container.innerHTML = '';
@@ -86,6 +112,12 @@ export class TimeScrubber {
 
     const current = this.hours[this.selectedIndex] || this.hours[0];
     const maxIdx = this.hours.length - 1;
+    const gustsKmh = this.hours.map(h => h.gustMax);
+    const timelineGradient = buildGustTimelineGradient(gustsKmh);
+    const hasExtremeGusts = gustsKmh.some(g => isExtremeGust(g));
+    const currentIsExtreme = isExtremeGust(current.gustMax);
+    const currentColor = getGustIntensityColor(current.gustMax);
+    const thumbColor = currentIsExtreme ? 'var(--gust-flash-color, #9333ea)' : currentColor;
 
     this.container.innerHTML = `
       <section class="time-scrubber-section" aria-label="48-Hour Time Navigation and Gust Scrubber">
@@ -98,22 +130,26 @@ export class TimeScrubber {
           </div>
 
           <div class="scrubber-quick-stats">
-            <span class="quick-speed" id="scrubber-quick-speed">Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}</span>
+            <span class="quick-speed ${currentIsExtreme ? 'is-extreme-gust' : ''}" id="scrubber-quick-speed" style="--quick-gust-color: ${currentColor};">Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}</span>
             <span class="quick-dir" id="scrubber-quick-dir">${current.cardinal} (${current.directionMean.toFixed(0)}°)</span>
           </div>
         </div>
 
         <!-- Slider Bar -->
-        <div class="slider-wrapper">
+        <div class="slider-wrapper ${hasExtremeGusts ? 'has-extreme-gusts' : ''}">
           <label for="time-range-slider" class="visually-hidden">Scrub through 48 hour gust predictions</label>
+          <div class="slider-timeline-track" id="slider-timeline-track" aria-hidden="true" style="background: ${timelineGradient};">
+            ${this.renderExtremeSegments()}
+          </div>
           <input
             type="range"
             id="time-range-slider"
-            class="time-range-slider"
+            class="time-range-slider ${hasExtremeGusts ? 'has-extreme-gusts' : ''} ${currentIsExtreme ? 'is-extreme-gust' : ''}"
             min="0"
             max="${maxIdx}"
             value="${this.selectedIndex}"
             step="1"
+            style="--slider-track-gradient: ${timelineGradient}; --slider-thumb-color: ${thumbColor};"
             aria-valuemin="0"
             aria-valuemax="${maxIdx}"
             aria-valuenow="${this.selectedIndex}"
@@ -227,9 +263,15 @@ export class TimeScrubber {
     const current = this.hours[this.selectedIndex];
     if (!current) return;
 
+    const currentIsExtreme = isExtremeGust(current.gustMax);
+    const currentColor = getGustIntensityColor(current.gustMax);
+    const thumbColor = currentIsExtreme ? 'var(--gust-flash-color, #9333ea)' : currentColor;
+
     const slider = this.container.querySelector<HTMLInputElement>('#time-range-slider');
     if (slider) {
       slider.value = this.selectedIndex.toString();
+      slider.style.setProperty('--slider-thumb-color', thumbColor);
+      slider.classList.toggle('is-extreme-gust', currentIsExtreme);
       slider.setAttribute('aria-valuenow', this.selectedIndex.toString());
       slider.setAttribute(
         'aria-valuetext',
@@ -243,8 +285,12 @@ export class TimeScrubber {
     const relBadge = this.container.querySelector('#scrubber-relative-badge');
     if (relBadge) relBadge.textContent = this.getRelativeLabel(current);
 
-    const speedSpan = this.container.querySelector('#scrubber-quick-speed');
-    if (speedSpan) speedSpan.textContent = `Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}`;
+    const speedSpan = this.container.querySelector<HTMLElement>('#scrubber-quick-speed');
+    if (speedSpan) {
+      speedSpan.textContent = `Peak Gust: ${formatSpeed(current.gustMax, this.speedUnit)}`;
+      speedSpan.style.setProperty('--quick-gust-color', currentColor);
+      speedSpan.classList.toggle('is-extreme-gust', currentIsExtreme);
+    }
 
     const dirSpan = this.container.querySelector('#scrubber-quick-dir');
     if (dirSpan) dirSpan.textContent = `${current.cardinal} (${current.directionMean.toFixed(0)}°)`;

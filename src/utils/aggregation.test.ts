@@ -7,6 +7,12 @@ import {
   aggregateHour
 } from './aggregation';
 import { convertSpeed, convertTemp, formatSpeed, getSpeedUnitLabel } from './units';
+import {
+  getGustIntensityColor,
+  isExtremeGust,
+  buildGustTimelineGradient,
+  PURPLE_GUST_THRESHOLD_KMH
+} from './beaufort';
 
 describe('Wind Direction Vector Math', () => {
   it('correctly calculates vector average across the 360/0 degree boundary', () => {
@@ -75,5 +81,31 @@ describe('aggregateHour for Gusts', () => {
     expect(hour.gustMax).toBe(38);
     expect(hour.cardinal).toBe('NNW');
     expect(hour.consensus).toBe('high');
+  });
+});
+
+describe('Gust Intensity Scrubber Timeline Colors', () => {
+  it('maps key gust thresholds to green -> yellow -> orange -> red -> purple (140 km/h)', () => {
+    expect(PURPLE_GUST_THRESHOLD_KMH).toBe(140);
+    expect(getGustIntensityColor(0)).toBe('#22c55e');   // Green
+    expect(getGustIntensityColor(35)).toBe('#facc15');  // Yellow
+    expect(getGustIntensityColor(70)).toBe('#f97316');  // Orange
+    expect(getGustIntensityColor(105)).toBe('#ef4444'); // Red
+    expect(getGustIntensityColor(140)).toBe('#9333ea'); // Purple
+  });
+
+  it('flags gusts above 140 km/h for flashing purple', () => {
+    expect(isExtremeGust(139.9)).toBe(false);
+    expect(isExtremeGust(140)).toBe(false);
+    expect(isExtremeGust(140.1)).toBe(true);
+    expect(isExtremeGust(180)).toBe(true);
+  });
+
+  it('builds a timeline gradient using flashing purple variable above 140 km/h', () => {
+    const gradient = buildGustTimelineGradient([0, 70, 140, 160]);
+    expect(gradient).toContain('#22c55e 0.00%');
+    expect(gradient).toContain('#f97316 33.33%');
+    expect(gradient).toContain('#9333ea 66.67%');
+    expect(gradient).toContain('var(--gust-flash-color, #9333ea) 100.00%');
   });
 });

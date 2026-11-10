@@ -110,3 +110,91 @@ export function getBeaufort(kmh: number): BeaufortInfo {
     };
   }
 }
+
+export const PURPLE_GUST_THRESHOLD_KMH = 140;
+
+interface ColorStop {
+  kmh: number;
+  r: number;
+  g: number;
+  b: number;
+  hex: string;
+}
+
+const GUST_COLOR_STOPS: ColorStop[] = [
+  { kmh: 0, r: 34, g: 197, b: 94, hex: '#22c55e' },     // Green (very low wind)
+  { kmh: 35, r: 250, g: 204, b: 21, hex: '#facc15' },   // Yellow
+  { kmh: 70, r: 249, g: 115, b: 22, hex: '#f97316' },   // Orange
+  { kmh: 105, r: 239, g: 68, b: 68, hex: '#ef4444' },   // Red
+  { kmh: 140, r: 147, g: 51, b: 234, hex: '#9333ea' }   // Purple (140 km/h)
+];
+
+function toHexByte(n: number): string {
+  return Math.round(Math.max(0, Math.min(255, n)))
+    .toString(16)
+    .padStart(2, '0');
+}
+
+/**
+ * Returns true if the gust intensity exceeds 140 km/h and should flash purple.
+ */
+export function isExtremeGust(kmh: number): boolean {
+  return !isNaN(kmh) && kmh > PURPLE_GUST_THRESHOLD_KMH;
+}
+
+/**
+ * Returns a hex color representing gust intensity in km/h:
+ * Green (0) -> Yellow (35) -> Orange (70) -> Red (105) -> Purple (140+).
+ */
+export function getGustIntensityColor(kmh: number): string {
+  if (isNaN(kmh) || kmh <= GUST_COLOR_STOPS[0].kmh) {
+    return GUST_COLOR_STOPS[0].hex;
+  }
+
+  const lastStop = GUST_COLOR_STOPS[GUST_COLOR_STOPS.length - 1];
+  if (kmh >= lastStop.kmh) {
+    return lastStop.hex;
+  }
+
+  for (let i = 0; i < GUST_COLOR_STOPS.length - 1; i++) {
+    const start = GUST_COLOR_STOPS[i];
+    const end = GUST_COLOR_STOPS[i + 1];
+    if (kmh >= start.kmh && kmh <= end.kmh) {
+      const t = (kmh - start.kmh) / (end.kmh - start.kmh);
+      const r = start.r + (end.r - start.r) * t;
+      const g = start.g + (end.g - start.g) * t;
+      const b = start.b + (end.b - start.b) * t;
+      return `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
+    }
+  }
+
+  return lastStop.hex;
+}
+
+/**
+ * Builds a CSS linear-gradient string coloring the timeline by hourly gust intensity.
+ * Hours above 140 km/h use var(--gust-flash-color) so they flash purple.
+ */
+export function buildGustTimelineGradient(gustsKmh: number[]): string {
+  if (gustsKmh.length === 0) {
+    return 'var(--border-color)';
+  }
+  if (gustsKmh.length === 1) {
+    const color = isExtremeGust(gustsKmh[0])
+      ? 'var(--gust-flash-color, #9333ea)'
+      : getGustIntensityColor(gustsKmh[0]);
+    return `linear-gradient(var(--slider-direction, to right), ${color} 0%, ${color} 100%)`;
+  }
+
+  const maxIdx = gustsKmh.length - 1;
+  const stops = gustsKmh.map((kmh, i) => {
+    const pct = ((i / maxIdx) * 100).toFixed(2);
+    const color = isExtremeGust(kmh)
+      ? 'var(--gust-flash-color, #9333ea)'
+      : getGustIntensityColor(kmh);
+    return `${color} ${pct}%`;
+  });
+
+  return `linear-gradient(var(--slider-direction, to right), ${stops.join(', ')})`;
+}
+
