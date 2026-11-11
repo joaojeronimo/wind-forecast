@@ -1,14 +1,22 @@
 import { AggregatedHour, SpeedUnit, TempUnit, ModelId } from '../types';
-import { AVAILABLE_MODELS } from '../api/openMeteo';
+import { AVAILABLE_MODELS, MODEL_MAX_HORIZON_HOURS } from '../api/openMeteo';
 import { formatSpeed, formatTemp, convertSpeed, getSpeedUnitLabel } from '../utils/units';
+
+export interface FocusCardOptions {
+  idPrefix?: string;
+  isExtended?: boolean;
+}
 
 export function renderCurrentFocusCard(
   container: HTMLElement,
   hour: AggregatedHour,
   speedUnit: SpeedUnit,
   tempUnit: TempUnit,
-  activeModelIds: ModelId[]
+  activeModelIds: ModelId[],
+  options?: FocusCardOptions
 ): void {
+  const p = options?.idPrefix ?? '';
+  const isExtended = options?.isExtended ?? false;
   const modelLookup = new Map(AVAILABLE_MODELS.map(m => [m.id, m]));
 
   const peakGustFormatted = formatSpeed(hour.gustMax, speedUnit);
@@ -25,13 +33,16 @@ export function renderCurrentFocusCard(
     hour.consensus === 'moderate' ? 'Moderate Spread' : 'Divergent Gusts';
 
   const arrowRotation = (hour.directionMean + 180) % 360;
+  const sublabelText = hour.reportingModelsCount < activeModelIds.length
+    ? `${hour.reportingModelsCount} of ${activeModelIds.length} active models reach this forecast horizon`
+    : `${hour.reportingModelsCount} models reporting gust forecasts`;
 
   container.innerHTML = `
-    <article class="focus-card" aria-labelledby="focus-card-title">
+    <article class="focus-card" aria-labelledby="${p}focus-card-title">
       <div class="focus-card-top-row">
         <div class="focus-time-header">
-          <h2 id="focus-card-title" class="focus-date">${hour.dayLabel} • ${hour.hourLabel}</h2>
-          <span class="focus-sublabel">${hour.reportingModelsCount} models reporting gust forecasts</span>
+          <h2 id="${p}focus-card-title" class="focus-date">${hour.dayLabel} • ${hour.hourLabel}</h2>
+          <span class="focus-sublabel">${sublabelText}</span>
         </div>
 
         <div class="focus-badges">
@@ -53,7 +64,7 @@ export function renderCurrentFocusCard(
             <span class="compass-marker marker-s">S</span>
             <span class="compass-marker marker-w">W</span>
             <div class="compass-arrow-container" style="transform: rotate(${arrowRotation}deg);">
-              <svg class="compass-arrow" viewBox="0 0 24 24" width="38" height="38" fill="currentColor">
+              <svg class="compass-arrow" viewBox="0 0 24 24" width="38" height="38" fill="currentColor" aria-hidden="true">
                 <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"></path>
               </svg>
             </div>
@@ -98,8 +109,24 @@ export function renderCurrentFocusCard(
         <div class="model-chips-grid">
           ${activeModelIds.map(id => {
             const model = modelLookup.get(id);
+            if (!model) return '';
             const val = hour.modelValues[id];
-            if (!model || !val) return '';
+            if (!val) {
+              if (!isExtended) return '';
+              const maxDays = Math.round((MODEL_MAX_HORIZON_HOURS[id] / 24) * 10) / 10;
+              return `
+                <div class="model-chip model-chip-out-of-range" style="border-left: 3px solid ${model.color}55;" title="${model.name} forecast horizon is up to ~${maxDays} days (${MODEL_MAX_HORIZON_HOURS[id]}h)">
+                  <div class="model-chip-header">
+                    <span class="model-chip-name" style="color: ${model.color};">${model.name}</span>
+                    <span class="model-chip-agency">${model.agency}</span>
+                  </div>
+                  <div class="model-chip-body">
+                    <div class="model-chip-speed model-chip-na">—</div>
+                  </div>
+                  <div class="model-chip-gust">Max range ~${maxDays}d (${MODEL_MAX_HORIZON_HOURS[id]}h)</div>
+                </div>
+              `;
+            }
             const mArrowRot = (val.direction + 180) % 360;
             return `
               <div class="model-chip" style="border-left: 3px solid ${model.color};">
@@ -112,7 +139,7 @@ export function renderCurrentFocusCard(
                     ${formatSpeed(val.gust, speedUnit)}
                   </div>
                   <div class="model-chip-dir" title="${val.direction}°">
-                    <svg class="chip-arrow" style="transform: rotate(${mArrowRot}deg);" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <svg class="chip-arrow" style="transform: rotate(${mArrowRot}deg);" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
                       <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"></path>
                     </svg>
                     <span>${val.direction}°</span>

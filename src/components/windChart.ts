@@ -7,6 +7,11 @@ export interface WindChartCallbacks {
   onHourSelect: (index: number) => void;
 }
 
+export interface WindChartOptions {
+  idPrefix?: string;
+  isExtended?: boolean;
+}
+
 export class WindChart {
   private container: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -19,26 +24,32 @@ export class WindChart {
   private resizeObserver: ResizeObserver | null = null;
   private isHovering = false;
   private hoverIndex = -1;
+  private idPrefix: string;
+  private isExtended: boolean;
 
-  constructor(container: HTMLElement, callbacks: WindChartCallbacks) {
+  constructor(container: HTMLElement, callbacks: WindChartCallbacks, options?: WindChartOptions) {
     this.container = container;
     this.callbacks = callbacks;
+    this.idPrefix = options?.idPrefix ?? '';
+    this.isExtended = options?.isExtended ?? false;
+    const p = this.idPrefix;
+
     this.container.innerHTML = `
-      <section class="chart-section" aria-label="48-Hour Multi-Model Wind Gusts Chart">
+      <section class="chart-section" id="${p}chart-section" aria-label="${this.isExtended ? 'Extended Multi-Model Wind Gusts Chart' : '48-Hour Multi-Model Wind Gusts Chart'}">
         <div class="chart-header">
           <div class="chart-title-group">
-            <h3 class="chart-title">48-Hour Wind Gusts Forecast & Multi-Model Comparison</h3>
-            <span class="chart-subtitle">Ensemble gust corridor (min to peak max) & model curves</span>
+            <h3 class="chart-title" id="${p}chart-title">${this.isExtended ? 'Extended Multi-Day Wind Gusts Forecast & Multi-Model Comparison' : '48-Hour Wind Gusts Forecast & Multi-Model Comparison'}</h3>
+            <span class="chart-subtitle" id="${p}chart-subtitle">Ensemble gust corridor (min to peak max) & model curves</span>
           </div>
-          <div class="chart-legend" id="chart-legend" aria-hidden="true"></div>
+          <div class="chart-legend" id="${p}chart-legend" aria-hidden="true"></div>
         </div>
         <div class="canvas-wrapper">
-          <canvas id="wind-chart-canvas" class="wind-chart-canvas"></canvas>
+          <canvas id="${p}wind-chart-canvas" class="wind-chart-canvas"></canvas>
         </div>
       </section>
     `;
 
-    this.canvas = this.container.querySelector<HTMLCanvasElement>('#wind-chart-canvas')!;
+    this.canvas = this.container.querySelector<HTMLCanvasElement>(`#${p}wind-chart-canvas`)!;
     this.ctx = this.canvas.getContext('2d');
 
     this.setupEvents();
@@ -55,6 +66,21 @@ export class WindChart {
     this.selectedIndex = selectedIndex;
     this.speedUnit = speedUnit;
     this.activeModelIds = activeModelIds;
+
+    if (this.isExtended && hours.length > 0) {
+      const p = this.idPrefix;
+      const days = Math.max(1, Math.ceil(hours.length / 24));
+      const lastHour = hours[hours.length - 1];
+      const titleEl = this.container.querySelector(`#${p}chart-title`);
+      const subEl = this.container.querySelector(`#${p}chart-subtitle`);
+      if (titleEl) {
+        titleEl.textContent = `Extended ${days}-Day (${hours.length}h) Wind Gusts Forecast & Multi-Model Comparison`;
+      }
+      if (subEl && lastHour) {
+        subEl.textContent = `All available future model data through ${lastHour.dayLabel} at ${lastHour.hourLabel} • Ensemble corridor & model curves`;
+      }
+    }
+
     this.renderLegend();
     this.draw();
   }
@@ -127,7 +153,7 @@ export class WindChart {
   }
 
   private renderLegend(): void {
-    const legend = this.container.querySelector<HTMLElement>('#chart-legend');
+    const legend = this.container.querySelector<HTMLElement>(`#${this.idPrefix}chart-legend`);
     if (!legend) return;
 
     const modelLookup = new Map(AVAILABLE_MODELS.map(m => [m.id, m]));
@@ -189,7 +215,7 @@ export class WindChart {
     }
     maxGust = Math.ceil((maxGust + 4) / 5) * 5;
 
-    const getX = (i: number) => padLeft + (i / (this.hours.length - 1)) * chartW;
+    const getX = (i: number) => padLeft + (i / Math.max(1, this.hours.length - 1)) * chartW;
     const getY = (val: number) => padTop + chartH - (val / maxGust) * chartH;
 
     // 1a. Beaufort Y-axis color strip
@@ -296,7 +322,17 @@ export class WindChart {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    const hourStep = chartW >= 680 ? 3 : chartW >= 320 ? 6 : 8;
+    const isMultiDay = this.hours.length > 72 || this.isExtended;
+    let hourStep = chartW >= 680 ? 3 : chartW >= 320 ? 6 : 8;
+    if (isMultiDay) {
+      const maxTickCount = Math.max(4, Math.floor(chartW / 58));
+      const candidateSteps = [6, 12, 24, 48, 72];
+      hourStep = candidateSteps.find(step => this.hours.length / step <= maxTickCount) ?? 72;
+    }
+
+    const totalDays = Math.max(1, Math.ceil(this.hours.length / 24));
+    const dayLabelStep = isMultiDay ? Math.max(1, Math.ceil((totalDays * 78) / chartW)) : 1;
+    let midnightCounter = 0;
     const maxIdx = this.hours.length - 1;
 
     for (let i = 0; i < this.hours.length; i++) {
@@ -304,7 +340,12 @@ export class WindChart {
       const x = getX(i);
 
       if (h.date.getHours() === 0 && i > 0) {
-        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)';
+        const shouldLabelDay = midnightCounter % dayLabelStep === 0;
+        midnightCounter++;
+
+        ctx.strokeStyle = isDark
+          ? (shouldLabelDay ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)')
+          : (shouldLabelDay ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.1)');
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
         ctx.moveTo(x, padTop);
@@ -312,14 +353,16 @@ export class WindChart {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
-        ctx.font = 'bold 10px sans-serif';
-        const dayX = Math.min(x + 25, width - padRight - 20);
-        ctx.fillText(h.dayLabel, dayX, padTop + 4);
+        if (shouldLabelDay && x < width - padRight - 42) {
+          ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+          ctx.font = 'bold 10px sans-serif';
+          const dayX = Math.min(x + 28, width - padRight - 24);
+          ctx.fillText(h.dayLabel, dayX, padTop + 4);
+        }
       }
 
       const isStepTick = i % hourStep === 0;
-      const isLastTick = i === maxIdx && (chartW >= 680 || (maxIdx % hourStep >= Math.ceil(hourStep * 0.65)));
+      const isLastTick = i === maxIdx && (maxIdx % hourStep >= Math.ceil(hourStep * 0.65));
 
       if (isStepTick || isLastTick) {
         const arrowY = padTop + chartH + 16;
@@ -340,8 +383,11 @@ export class WindChart {
 
         ctx.font = 'bold 10px sans-serif';
         ctx.fillStyle = h.beaufort.color;
-        const labelX = i === maxIdx && width < 480 ? Math.min(x, width - 16) : x;
-        ctx.fillText(h.hourLabel, labelX, padTop + chartH + 30);
+        const labelX = i === maxIdx && width < 480 ? Math.min(x, width - 18) : x;
+        const bottomLabel = isMultiDay && hourStep >= 24
+          ? h.date.toLocaleDateString([], { weekday: 'short', day: 'numeric' })
+          : h.hourLabel;
+        ctx.fillText(bottomLabel, labelX, padTop + chartH + 30);
       }
     }
 
@@ -370,7 +416,9 @@ export class WindChart {
       ctx.stroke();
 
       const peakStr = `${convertSpeed(activeHour.gustMax, this.speedUnit).toFixed(1)} ${getSpeedUnitLabel(this.speedUnit)}`;
-      const tooltipText = `${activeHour.hourLabel} • Peak Gust: ${peakStr} ${activeHour.cardinal}`;
+      const tooltipText = isMultiDay
+        ? `${activeHour.dayLabel} ${activeHour.hourLabel} • Peak: ${peakStr} ${activeHour.cardinal} (${activeHour.reportingModelsCount}m)`
+        : `${activeHour.hourLabel} • Peak Gust: ${peakStr} ${activeHour.cardinal}`;
       ctx.font = 'bold 11px sans-serif';
       const textMetrics = ctx.measureText(tooltipText);
       const boxW = textMetrics.width + 16;

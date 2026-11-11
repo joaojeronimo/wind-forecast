@@ -1,15 +1,23 @@
 import { ModelId } from '../types';
-import { AVAILABLE_MODELS } from '../api/openMeteo';
+import { AVAILABLE_MODELS, MODEL_MAX_HORIZON_HOURS } from '../api/openMeteo';
 
 export interface ModelSelectorCallbacks {
   onModelsChanged: (activeModels: ModelId[]) => void;
 }
 
+export interface ModelSelectorOptions {
+  idPrefix?: string;
+  isExtended?: boolean;
+}
+
 export function renderModelSelector(
   container: HTMLElement,
   activeModels: ModelId[],
-  callbacks: ModelSelectorCallbacks
+  callbacks: ModelSelectorCallbacks,
+  options?: ModelSelectorOptions
 ): void {
+  const p = options?.idPrefix ?? '';
+  const isExtended = options?.isExtended ?? false;
   const activeSet = new Set(activeModels);
 
   container.innerHTML = `
@@ -17,13 +25,15 @@ export function renderModelSelector(
       <div class="model-selector-header">
         <h3 class="model-selector-title">Ensemble Forecast Models (${activeModels.length}/${AVAILABLE_MODELS.length} Active)</h3>
         <div class="model-selector-actions">
-          <button type="button" class="btn btn-outline btn-xs" id="models-select-all-btn">Select All</button>
-          <button type="button" class="btn btn-outline btn-xs" id="models-global-top3-btn">Top 3 (ECMWF, GFS, ICON)</button>
+          <button type="button" class="btn btn-outline btn-xs" id="${p}models-select-all-btn">Select All</button>
+          <button type="button" class="btn btn-outline btn-xs" id="${p}models-global-top3-btn">Top 3 (ECMWF, GFS, ICON)</button>
         </div>
       </div>
       <div class="models-grid">
         ${AVAILABLE_MODELS.map(m => {
           const isChecked = activeSet.has(m.id);
+          const maxDays = Math.round((MODEL_MAX_HORIZON_HOURS[m.id] / 24) * 10) / 10;
+          const horizonSuffix = isExtended ? ` • Up to ${maxDays}d` : '';
           return `
             <label class="model-checkbox-label ${isChecked ? 'checked' : ''}" style="border-left: 3px solid ${m.color};">
               <input
@@ -34,7 +44,7 @@ export function renderModelSelector(
               />
               <div class="model-label-content">
                 <span class="model-label-name" style="color: ${m.color};">${m.name}</span>
-                <span class="model-label-agency">${m.agency} • ${m.resolution}</span>
+                <span class="model-label-agency">${m.agency} • ${m.resolution}${horizonSuffix}</span>
               </div>
             </label>
           `;
@@ -62,12 +72,12 @@ export function renderModelSelector(
     });
   });
 
-  container.querySelector('#models-select-all-btn')?.addEventListener('click', () => {
+  container.querySelector(`#${p}models-select-all-btn`)?.addEventListener('click', () => {
     const all = AVAILABLE_MODELS.map(m => m.id);
     callbacks.onModelsChanged(all);
   });
 
-  container.querySelector('#models-global-top3-btn')?.addEventListener('click', () => {
+  container.querySelector(`#${p}models-global-top3-btn`)?.addEventListener('click', () => {
     const top3: ModelId[] = ['ecmwf_ifs025', 'gfs_seamless', 'icon_seamless'];
     callbacks.onModelsChanged(top3);
   });

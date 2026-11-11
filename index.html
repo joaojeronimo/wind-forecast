@@ -28,10 +28,20 @@
           id="tab-ensemble"
           class="view-nav-tab"
           aria-selected="true"
-          aria-controls="panel-ensemble"
         >
-          <span class="tab-icon">🌬️</span>
-          <span class="tab-label">Ensemble Forecast</span>
+          <span class="tab-icon" aria-hidden="true">🌬️</span>
+          <span class="tab-label">48h Ensemble</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tab-extended"
+          class="view-nav-tab"
+          aria-selected="false"
+        >
+          <span class="tab-icon" aria-hidden="true">🗓️</span>
+          <span class="tab-label">Extended Ensemble</span>
+          <span class="tab-badge" id="extended-tab-badge">16-Day</span>
         </button>
         <button
           type="button"
@@ -39,9 +49,8 @@
           id="tab-evolution"
           class="view-nav-tab"
           aria-selected="false"
-          aria-controls="panel-evolution"
         >
-          <span class="tab-icon">📈</span>
+          <span class="tab-icon" aria-hidden="true">📈</span>
           <span class="tab-label">Run Evolution</span>
           <span class="tab-badge">New</span>
         </button>
@@ -54,6 +63,14 @@
           <div id="chart-container"></div>
           <div id="model-selector-container"></div>
           <div id="table-container"></div>
+        </div>
+
+        <div id="panel-extended" role="tabpanel" aria-labelledby="tab-extended" class="view-panel" hidden>
+          <div id="extended-time-scrubber-container"></div>
+          <div id="extended-focus-card-container"></div>
+          <div id="extended-chart-container"></div>
+          <div id="extended-model-selector-container"></div>
+          <div id="extended-table-container"></div>
         </div>
 
         <div id="panel-evolution" role="tabpanel" aria-labelledby="tab-evolution" class="view-panel" hidden>

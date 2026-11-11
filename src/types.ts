@@ -80,6 +80,8 @@ export interface ForecastResult {
   fetchedAt: Date;
   locationName: string;
   hours: AggregatedHour[];
+  allHours?: AggregatedHour[];
+  forecastDays?: number;
   activeModels: ModelId[];
   isCached?: boolean;
 }
@@ -101,7 +103,7 @@ export interface AppSettings {
   autoRefreshMinutes: number;
 }
 
-export type ViewMode = 'ensemble' | 'evolution';
+export type ViewMode = 'ensemble' | 'extended' | 'evolution';
 
 export interface SingleRunInfo {
   runId: string;

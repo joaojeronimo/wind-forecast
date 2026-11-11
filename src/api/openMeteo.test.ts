@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest';
-import { fetchWindForecast } from './openMeteo';
+import {
+  fetchWindForecast,
+  generateDemoForecast,
+  trimTrailingEmptyHours,
+  MAX_FORECAST_DAYS
+} from './openMeteo';
 import { clearOpenMeteoCache } from '../utils/cache';
 
 class MockStorage implements Storage {
@@ -31,7 +36,7 @@ class MockStorage implements Storage {
   }
 }
 
-describe('fetchWindForecast caching integration', () => {
+describe('fetchWindForecast caching integration & extended horizon', () => {
   const mockApiResponse = {
     latitude: 38.7167,
     longitude: -9.139,
@@ -154,5 +159,59 @@ describe('fetchWindForecast caching integration', () => {
     expect(result.hours[0].modelValues.ecmwf_ifs025?.gust).toBe(42);
     expect(result.hours[0].modelValues.ecmwf_ifs025?.speed).toBe(25);
     expect(result.hours[0].modelValues.ecmwf_ifs025?.direction).toBe(180);
+  });
+
+  it('returns all available future hours beyond 48h and trims trailing empty hours when forecastDays > 3', async () => {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    const totalPoints = 120;
+    const validPoints = 96; // Last 24 points have null model data
+    const times = Array.from({ length: totalPoints }, (_, i) =>
+      new Date(now.getTime() + i * 3600 * 1000).toISOString().slice(0, 16)
+    );
+    const gusts = Array.from({ length: totalPoints }, (_, i) => (i < validPoints ? 25 + (i % 10) : null));
+    const speeds = Array.from({ length: totalPoints }, (_, i) => (i < validPoints ? 18 : null));
+    const dirs = Array.from({ length: totalPoints }, (_, i) => (i < validPoints ? 330 : null));
+    const temps = Array.from({ length: totalPoints }, (_, i) => (i < validPoints ? 17 : null));
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        latitude: 38.7167,
+        longitude: -9.139,
+        timezone: 'UTC',
+        elevation: 20,
+        hourly: {
+          time: times,
+          wind_gusts_10m_gfs_seamless: gusts,
+          wind_speed_10m_gfs_seamless: speeds,
+          wind_direction_10m_gfs_seamless: dirs,
+          temperature_2m_gfs_seamless: temps
+        }
+      })
+    } as Response);
+
+    const extResult = await fetchWindForecast(
+      38.7167,
+      -9.139,
+      'Lisbon',
+      ['gfs_seamless'],
+      MAX_FORECAST_DAYS
+    );
+
+    expect(extResult.forecastDays).toBe(16);
+    expect(extResult.hours.length).toBe(validPoints);
+    expect(extResult.allHours?.length).toBe(totalPoints);
+    expect(extResult.hours[extResult.hours.length - 1].reportingModelsCount).toBe(1);
+  });
+
+  it('generates extended demo forecasts respecting model horizon limits', () => {
+    const fullDemo = generateDemoForecast(38.7167, -9.139, 'Lisbon', 384);
+    expect(fullDemo.hours.length).toBe(384);
+
+    // Météo-France only reaches 108h
+    const mfOnlyDemo = generateDemoForecast(38.7167, -9.139, 'Lisbon', 384, ['meteofrance_seamless']);
+    expect(mfOnlyDemo.hours.length).toBe(108);
+    expect(trimTrailingEmptyHours(mfOnlyDemo.allHours!).length).toBe(108);
   });
 });

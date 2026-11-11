@@ -5,29 +5,42 @@ export interface ForecastTableCallbacks {
   onHourSelect: (index: number) => void;
 }
 
+export interface ForecastTableOptions {
+  idPrefix?: string;
+  isExtended?: boolean;
+}
+
 export function renderForecastTable(
   container: HTMLElement,
   hours: AggregatedHour[],
   selectedIndex: number,
   speedUnit: SpeedUnit,
   tempUnit: TempUnit,
-  callbacks: ForecastTableCallbacks
+  callbacks: ForecastTableCallbacks,
+  options?: ForecastTableOptions
 ): void {
   if (hours.length === 0) {
     container.innerHTML = '';
     return;
   }
 
-  const prevWrapper = container.querySelector<HTMLElement>('#forecast-table-wrapper');
+  const p = options?.idPrefix ?? '';
+  const isExtended = (options?.isExtended ?? false) || hours.length > 72;
+  const daysSpan = Math.max(1, Math.ceil(hours.length / 24));
+  const captionTitle = isExtended
+    ? `Extended ${daysSpan}-Day (${hours.length}-Hour) Detailed Hourly Gust Forecast Matrix`
+    : '48-Hour Detailed Hourly Gust Forecast Matrix';
+
+  const prevWrapper = container.querySelector<HTMLElement>(`#${p}forecast-table-wrapper`);
   const prevScrollTop = prevWrapper ? prevWrapper.scrollTop : null;
   const prevScrollLeft = prevWrapper ? prevWrapper.scrollLeft : null;
 
   container.innerHTML = `
-    <section class="table-section" aria-labelledby="forecast-table-caption">
+    <section class="table-section" aria-labelledby="${p}forecast-table-caption">
       <div class="table-header-bar">
-        <h3 id="forecast-table-caption" class="table-caption-title">48-Hour Detailed Hourly Gust Forecast Matrix</h3>
+        <h3 id="${p}forecast-table-caption" class="table-caption-title">${captionTitle}</h3>
         <div class="table-actions">
-          <button type="button" class="btn btn-outline btn-sm" id="table-scroll-selected-btn">
+          <button type="button" class="btn btn-outline btn-sm" id="${p}table-scroll-selected-btn">
             Scroll to Selected
           </button>
         </div>
@@ -36,9 +49,9 @@ export function renderForecastTable(
       <div
         tabindex="0"
         role="region"
-        aria-labelledby="forecast-table-caption"
+        aria-labelledby="${p}forecast-table-caption"
         class="table-wrapper"
-        id="forecast-table-wrapper"
+        id="${p}forecast-table-wrapper"
       >
         <table class="forecast-data-table">
           <thead>
@@ -61,6 +74,7 @@ export function renderForecastTable(
               const consensusBadgeClass =
                 h.consensus === 'high' ? 'badge-consensus-high' :
                 h.consensus === 'moderate' ? 'badge-consensus-moderate' : 'badge-consensus-divergent';
+              const dayDisplay = isExtended ? h.dayLabel : h.dayLabel.split(',')[0];
 
               return `
                 <tr
@@ -73,7 +87,7 @@ export function renderForecastTable(
                 >
                   <!-- Sticky Row Header -->
                   <th scope="row" class="col-sticky-time">
-                    <span class="cell-day">${h.dayLabel.split(',')[0]}</span>
+                    <span class="cell-day">${dayDisplay}</span>
                     <span class="cell-time">${h.hourLabel}</span>
                     ${h.isCurrentHour ? '<span class="cell-now-badge">Now</span>' : ''}
                   </th>
@@ -127,6 +141,7 @@ export function renderForecastTable(
                     <span class="badge ${consensusBadgeClass}">
                       ${h.consensus}
                     </span>
+                    ${isExtended ? `<span class="spread-dev" title="${h.reportingModelsCount} models reporting">${h.reportingModelsCount}m</span>` : ''}
                   </td>
 
                   <td class="col-action">
@@ -159,13 +174,13 @@ export function renderForecastTable(
     });
   });
 
-  const scrollBtn = container.querySelector<HTMLButtonElement>('#table-scroll-selected-btn');
+  const scrollBtn = container.querySelector<HTMLButtonElement>(`#${p}table-scroll-selected-btn`);
   scrollBtn?.addEventListener('click', () => {
     const selectedRow = container.querySelector<HTMLTableRowElement>(`.table-data-row[data-hour-idx="${selectedIndex}"]`);
     selectedRow?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
-  const newWrapper = container.querySelector<HTMLElement>('#forecast-table-wrapper');
+  const newWrapper = container.querySelector<HTMLElement>(`#${p}forecast-table-wrapper`);
   if (newWrapper && prevScrollTop !== null) {
     newWrapper.scrollTop = prevScrollTop;
     if (prevScrollLeft !== null) {

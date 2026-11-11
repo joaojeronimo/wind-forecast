@@ -2,6 +2,7 @@ import {
   ModelId,
   ModelInfo,
   ModelDataPoint,
+  AggregatedHour,
   ForecastResult
 } from '../types';
 import { aggregateHour } from '../utils/aggregation';
@@ -14,6 +15,11 @@ import {
 
 export { clearOpenMeteoCache };
 
+/**
+ * Maximum forecast horizon supported by Open-Meteo /v1/forecast (16 days / up to 384 hours)
+ */
+export const MAX_FORECAST_DAYS = 16;
+
 export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'best_match', name: 'Best Match', agency: 'Open-Meteo Blend', resolution: '1-11 km', color: '#0284c7', enabled: true },
   { id: 'ecmwf_ifs025', name: 'ECMWF IFS', agency: 'European Centre (ECMWF)', resolution: '25 km', color: '#4f46e5', enabled: true },
@@ -24,14 +30,43 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'ukmo_seamless', name: 'UKMO Seamless', agency: 'UK Met Office', resolution: '10-25 km', color: '#db2777', enabled: true }
 ];
 
+/**
+ * Approximate maximum forecast horizon (in hours) per model on Open-Meteo
+ */
+export const MODEL_MAX_HORIZON_HOURS: Record<ModelId, number> = {
+  best_match: 384,
+  gfs_seamless: 384,
+  ecmwf_ifs025: 360,
+  gem_seamless: 240,
+  icon_seamless: 180,
+  ukmo_seamless: 168,
+  meteofrance_seamless: 108
+};
+
+/**
+ * Trims trailing hours at the end of the timeline where no active models report data,
+ * ensuring the extended forecast spans strictly as far into the future as valid data exists.
+ */
+export function trimTrailingEmptyHours(hours: AggregatedHour[]): AggregatedHour[] {
+  let lastValidIndex = hours.length - 1;
+  while (lastValidIndex >= 0 && hours[lastValidIndex].reportingModelsCount === 0) {
+    lastValidIndex--;
+  }
+  if (lastValidIndex < 0) {
+    return hours;
+  }
+  return hours.slice(0, lastValidIndex + 1);
+}
+
 export async function fetchWindForecast(
   latitude: number,
   longitude: number,
   locationName: string,
   modelsToQuery: ModelId[] = AVAILABLE_MODELS.map(m => m.id),
   forecastDays = 3,
-  options?: { forceRefresh?: boolean }
+  options?: { forceRefresh?: boolean; maxHours?: number }
 ): Promise<ForecastResult> {
+  const clampedDays = Math.max(1, Math.min(MAX_FORECAST_DAYS, forecastDays));
   const modelsParam = modelsToQuery.join(',');
   const hourlyVariables = [
     'wind_gusts_10m',
@@ -44,7 +79,7 @@ export async function fetchWindForecast(
   url.searchParams.set('latitude', latitude.toFixed(4));
   url.searchParams.set('longitude', longitude.toFixed(4));
   url.searchParams.set('hourly', hourlyVariables);
-  url.searchParams.set('forecast_days', forecastDays.toString());
+  url.searchParams.set('forecast_days', clampedDays.toString());
   url.searchParams.set('models', modelsParam);
   url.searchParams.set('wind_speed_unit', 'kmh'); // We fetch in base km/h and convert client-side
   url.searchParams.set('timezone', 'auto');
@@ -114,11 +149,12 @@ export async function fetchWindForecast(
   let startIndex = times.findIndex(t => new Date(t) >= oneHourAgo);
   if (startIndex === -1) startIndex = 0;
 
-  // We want the next 48 hours
-  const endIndex = Math.min(times.length, startIndex + 48);
+  // For default 3-day requests, cap to 48 hours; for extended (>3 days), take all available future hours
+  const maxHours = options?.maxHours ?? (clampedDays <= 3 ? 48 : times.length);
+  const endIndex = Math.min(times.length, startIndex + maxHours);
   const selectedTimes = times.slice(startIndex, endIndex);
 
-  const hours = selectedTimes.map((timeStr, offset) => {
+  const allHours = selectedTimes.map((timeStr, offset) => {
     const absoluteIndex = startIndex + offset;
     const modelMap: Partial<Record<ModelId, ModelDataPoint>> = {};
 
@@ -150,6 +186,8 @@ export async function fetchWindForecast(
     return aggregateHour(timeStr, modelMap, modelsToQuery);
   });
 
+  const hours = clampedDays > 3 ? trimTrailingEmptyHours(allHours) : allHours;
+
   return {
     latitude: data.latitude,
     longitude: data.longitude,
@@ -158,6 +196,8 @@ export async function fetchWindForecast(
     fetchedAt,
     locationName,
     hours,
+    allHours,
+    forecastDays: clampedDays,
     activeModels: modelsToQuery,
     isCached
   };
@@ -169,26 +209,32 @@ export async function fetchWindForecast(
 export function generateDemoForecast(
   latitude: number,
   longitude: number,
-  locationName: string
+  locationName: string,
+  totalHours = 48,
+  activeModels: ModelId[] = AVAILABLE_MODELS.map(m => m.id)
 ): ForecastResult {
   const models = AVAILABLE_MODELS.map(m => m.id);
   const now = new Date();
   now.setMinutes(0, 0, 0);
 
-  const hours = Array.from({ length: 48 }, (_, i) => {
+  const allHours = Array.from({ length: totalHours }, (_, i) => {
     const timeDate = new Date(now.getTime() + i * 3600 * 1000);
     const timeStr = timeDate.toISOString().slice(0, 19);
 
-    // Diurnal gust cycle simulation
+    // Diurnal gust cycle simulation + synoptic multi-day wave
     const hourOfDay = timeDate.getHours();
     const thermalBoost = Math.sin(((hourOfDay - 8) / 12) * Math.PI);
+    const synopticWave = Math.sin(i / 36) * 8;
     // Gusts are higher than sustained wind
-    const baseGust = 28 + (thermalBoost > 0 ? thermalBoost * 22 : 0);
-    const baseDir = 330 + Math.sin(i / 10) * 20; // NNW wind
+    const baseGust = Math.max(10, 28 + synopticWave + (thermalBoost > 0 ? thermalBoost * 22 : 0));
+    const baseDir = 330 + Math.sin(i / 18) * 25; // NNW wind
     const baseTemp = 16 + (thermalBoost > 0 ? thermalBoost * 6 : -2);
 
     const modelMap: Partial<Record<ModelId, ModelDataPoint>> = {};
     models.forEach((m, mIdx) => {
+      if (totalHours > 48 && i >= MODEL_MAX_HORIZON_HOURS[m]) {
+        return;
+      }
       // Model variations in gust prediction
       const modelGustBias = (mIdx % 3 - 1) * 4.5 + Math.sin(i + mIdx) * 3;
       const modelDirBias = (mIdx % 2 === 0 ? 1 : -1) * (mIdx * 3);
@@ -204,8 +250,10 @@ export function generateDemoForecast(
       };
     });
 
-    return aggregateHour(timeStr, modelMap, models);
+    return aggregateHour(timeStr, modelMap, activeModels);
   });
+
+  const hours = totalHours > 48 ? trimTrailingEmptyHours(allHours) : allHours;
 
   return {
     latitude,
@@ -215,7 +263,9 @@ export function generateDemoForecast(
     fetchedAt: new Date(),
     locationName: `${locationName} (Demo Mode)`,
     hours,
-    activeModels: models,
+    allHours,
+    forecastDays: Math.ceil(totalHours / 24),
+    activeModels,
     isCached: false
   };
 }
